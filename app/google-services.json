@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "402571935660",
+    "project_id": "mappiapp",
+    "storage_bucket": "mappiapp.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:402571935660:android:d06435fe38bff2e93b4409",
+        "android_client_info": {
+          "package_name": "com.example.mappi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5vkNdMcK4jzuwVIJphfDnYVANPp1NoTU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
