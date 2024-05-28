@@ -1,70 +1,45 @@
 package com.example.mappi.data.datasource.remote
 
 import android.content.Context
-import android.content.Intent
-import android.content.IntentSender
-import com.example.mappi.R
+import android.net.Uri
 import com.example.mappi.data.datasource.remote.dto.UserDto
 import com.example.mappi.util.Resource
-import com.google.android.gms.auth.api.identity.BeginSignInRequest
 import com.google.android.gms.auth.api.identity.SignInClient
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.storage.StorageReference
 import kotlinx.coroutines.tasks.await
-import java.util.concurrent.CancellationException
 import javax.inject.Inject
 
 class FirebaseDataSource @Inject constructor(
+    private val storageReference: StorageReference,
     private val firebaseAuth: FirebaseAuth,
     private val oneTapClient: SignInClient,
     private val context: Context
 ) {
 
-    suspend fun prepareGoogleIntent(): IntentSender? {
-        val result = try {
-            oneTapClient.beginSignIn(buildSignInRequest()).await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            if (e is CancellationException) throw e
-            null
-        }
-        return result?.pendingIntent?.intentSender
-    }
-
-    suspend fun signInWithGoogle(intent: Intent): Resource<UserDto> {
-        val credential = oneTapClient.getSignInCredentialFromIntent(intent)
-        val googleToken =
-            credential.googleIdToken ?: return Resource.Error("Google token not found.")
-        val googleCredentials = GoogleAuthProvider.getCredential(googleToken, null)
+    suspend fun uploadPhoto(uri: Uri): String {
+        val photoRef =
+            storageReference.child("posts/${firebaseAuth.currentUser?.uid}/${System.currentTimeMillis()}.jpg")
         return try {
-            val user = firebaseAuth.signInWithCredential(googleCredentials).await().user
-            user?.let {
-                Resource.Success(
-                    UserDto(
-                        userId = it.uid,
-                        userName = it.displayName,
-                        profilePictureUrl = it.photoUrl.toString()
-                    )
-                )
-            } ?: Resource.Error("User not found")
+            photoRef.putFile(uri).await()
+            photoRef.downloadUrl.await().toString()
         } catch (e: Exception) {
             e.printStackTrace()
-            if (e is CancellationException) throw e
-            Resource.Error(e.localizedMessage ?: "An error occurred")
+            ""
         }
     }
 
-    private fun buildSignInRequest(): BeginSignInRequest = BeginSignInRequest.Builder()
-        .setGoogleIdTokenRequestOptions(
-            BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                .setSupported(true)
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(context.getString(R.string.web_client_id))
-                .build()
-        )
-        .setAutoSelectEnabled(true)
-        .build()
+    suspend fun getPosts(): List<String> {
+        return try {
+            val listResult =
+                storageReference.child("posts/${firebaseAuth.currentUser?.uid}").listAll().await()
+            listResult.items.map { it.downloadUrl.await().toString() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
 
     suspend fun signInWithEmail(email: String, password: String): Resource<UserDto> {
         return try {
@@ -74,6 +49,7 @@ class FirebaseDataSource @Inject constructor(
                     UserDto(
                         userId = it.uid,
                         userName = it.displayName,
+                        email = it.email,
                         profilePictureUrl = it.photoUrl.toString()
                     )
                 )
@@ -96,6 +72,7 @@ class FirebaseDataSource @Inject constructor(
                     UserDto(
                         userId = user.uid,
                         userName = user.displayName,
+                        email = user.email,
                         profilePictureUrl = user.photoUrl.toString()
                     )
                 )
@@ -119,6 +96,7 @@ class FirebaseDataSource @Inject constructor(
             UserDto(
                 userId = it.uid,
                 userName = it.displayName,
+                email = it.email,
                 profilePictureUrl = it.photoUrl.toString()
             )
         }

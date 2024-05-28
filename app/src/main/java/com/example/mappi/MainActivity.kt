@@ -1,6 +1,9 @@
 package com.example.mappi
 
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,25 +15,38 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
+import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import com.example.mappi.presentation.ui.profile.viewmodel.ProfileViewModel
+import com.example.mappi.presentation.ui.NavHostSetup
+import com.example.mappi.presentation.ui.main.composables.MainScreen
+import com.example.mappi.presentation.ui.main.composables.ProfileScreen
+import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.presentation.ui.sign_in.GoogleAuthUiClient
-import com.example.mappi.presentation.ui.sign_in.ProfileScreen
+import com.example.mappi.presentation.ui.sign_in.SignInState
 import com.example.mappi.presentation.ui.sign_in.composables.SignInScreen
 import com.example.mappi.presentation.ui.sign_in.viemodel.SignInViewModel
+import com.example.mappi.presentation.ui.sign_up.SignUpState
 import com.example.mappi.presentation.ui.sign_up.composables.RegisterScreen
 import com.example.mappi.presentation.ui.sign_up.viewmodel.SignUpViewModel
 import com.example.mappi.presentation.ui.theme.MappiTheme
 import com.google.android.gms.auth.api.identity.Identity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
+import android.Manifest
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.app.ActivityCompat
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -42,145 +58,228 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    @OptIn(ExperimentalAnimationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MappiTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
                     val navController = rememberNavController()
-                    NavHost(navController = navController, startDestination = "sign_in") {
-                        composable("sign_in") {
-                            val viewModelSignIn: SignInViewModel by viewModels()
-                            val singInState by viewModelSignIn.state.collectAsStateWithLifecycle()
-
-                            LaunchedEffect(key1 = Unit) {
-                                if (googleAuthUiClient.getSignedInUser() != null) {
-                                    navController.navigate("profile")
-                                }
-                            }
-
-                            val launcher = rememberLauncherForActivityResult(
-                                contract = ActivityResultContracts.StartIntentSenderForResult(),
-                                onResult = { result ->
-                                    if (result.resultCode == RESULT_OK) {
-                                        lifecycleScope.launch {
-                                            val signInResult = googleAuthUiClient.signInWithIntent(
-                                                intent = result.data ?: return@launch
-                                            )
-                                            viewModelSignIn.onSignInResult(signInResult)
-                                        }
-                                    }
-                                }
+                    NavHostSetup(
+                        navController,
+                        signInScreenContent = { SignInScreenContent(navController) },
+                        registerScreenContent = { RegisterScreenContent(navController) },
+                        mainScreen = {
+                            MainScreen(
+                                navController,
+                                mapScreen = { MapScreen() },
+                                chatScreen = { ChatScreen() },
+                                profileScreen = { ProfileScreenContent(navController) },
                             )
+                        },
+                        mapScreen = { MapScreen() },
+                        chatScreen = { ChatScreen() },
+                        profileScreen = { ProfileScreenContent(navController) },
+                    )
+                }
+            }
+        }
+    }
 
-                            LaunchedEffect(key1 = singInState.isSignInSuccessful) {
-                                if (singInState.isSignInSuccessful) {
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Sign in successful",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+    @OptIn(ExperimentalAnimationApi::class)
+    @Composable
+    private fun SignInScreenContent(navController: NavController) {
+        val signInViewModel: SignInViewModel by viewModels()
+        val signInState by signInViewModel.state.collectAsStateWithLifecycle()
 
-                                    navController.navigate("profile")
-                                    viewModelSignIn.resetState()
-                                } else if (singInState.signInError != null) {
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Sign in failed: ${singInState.signInError}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    viewModelSignIn.resetState()
-                                }
-                            }
+        LaunchedEffect(Unit) {
+            googleAuthUiClient.getSignedInUser()?.let {
+                navController.navigate("main") {
+                    popUpTo("sign_in") { inclusive = true }
+                }
+            }
+        }
 
-                            SignInScreen(
-                                state = singInState,
-                                onSignInWithGoogleClick = {
-                                    lifecycleScope.launch {
-                                        val signInIntentSender = googleAuthUiClient.signIn()
-                                        launcher.launch(
-                                            IntentSenderRequest.Builder(
-                                                signInIntentSender ?: return@launch
-                                            ).build()
-                                        )
-                                    }
-                                },
-                                onEmailSignInClick = { email, password ->
-                                    lifecycleScope.launch {
-                                        viewModelSignIn.signInWithEmail(email, password)
-                                    }
-                                },
-                                navController = navController
-                            )
-                        }
-                        composable("profile") {
-                            val profileViewModel: ProfileViewModel by viewModels()
+        val launcher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartIntentSenderForResult()
+        ) { result ->
+            if (result.resultCode == RESULT_OK) {
+                lifecycleScope.launch {
+                    val signInResult =
+                        googleAuthUiClient.signInWithIntent(result.data ?: return@launch)
+                    signInViewModel.onSignInResult(signInResult)
+                }
+            }
+        }
 
-                            ProfileScreen(
-                                userData = googleAuthUiClient.getSignedInUser(),
-                                onSignOut = {
-                                    lifecycleScope.launch {
-                                        profileViewModel.signOut()
-                                        Toast.makeText(
-                                            applicationContext,
-                                            "Signed out",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+        LaunchedEffect(signInState.isSignInSuccessful, signInState.signInError) {
+            handleSignInState(signInState, signInViewModel, navController)
+        }
 
-                                        navController.popBackStack()
-                                    }
-                                }
-                            )
-                        }
-                        // Registration screen route
-                        composable("register") {
-                            val viewModelSignUp: SignUpViewModel by viewModels()
-                            val signUpState by viewModelSignUp.state.collectAsStateWithLifecycle()
+        SignInScreen(
+            state = signInState,
+            onSignInWithGoogleClick = {
+                lifecycleScope.launch {
+                    val signInIntentSender = googleAuthUiClient.signIn()
+                    launcher.launch(
+                        IntentSenderRequest.Builder(signInIntentSender ?: return@launch).build()
+                    )
+                }
+            },
+            onEmailSignInClick = { email, password ->
+                lifecycleScope.launch {
+                    signInViewModel.signInWithEmail(email, password)
+                }
+            },
+            navController = navController
+        )
+    }
 
-                            LaunchedEffect(
-                                key1 = signUpState.isSignUpSuccessful,
-                                key2 = signUpState.signUpError
-                            ) {
-                                if (signUpState.isSignUpSuccessful) {
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Registration successful",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    navController.navigate("profile")
-                                    viewModelSignUp.resetState()
-                                } else if (signUpState.signUpError != null) {
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Registration failed: ${signUpState.signUpError}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    viewModelSignUp.resetState()
-                                }
-                            }
+    private fun handleSignInState(
+        signInState: SignInState,
+        signInViewModel: SignInViewModel,
+        navController: NavController
+    ) {
+        when {
+            signInState.isSignInSuccessful -> {
+                showToast("Sign in successful")
+                navController.navigate("main") {
+                    popUpTo("sign_in") { inclusive = true }
+                }
+                signInViewModel.resetState()
+            }
 
-                            RegisterScreen(
-                                onRegisterClick = { username, email, password, repeatPassword ->
-                                    lifecycleScope.launch {
-                                        viewModelSignUp.signUpWithEmail(
-                                            username,
-                                            email,
-                                            password,
-                                            repeatPassword
-                                        )
-                                    }
-                                },
-                                navController = navController
-                            )
-                        }
+            signInState.signInError != null -> {
+                showToast("Sign in failed: ${signInState.signInError}")
+                signInViewModel.resetState()
+            }
+        }
+    }
+
+    @Composable
+    private fun RegisterScreenContent(navController: NavController) {
+        val signUpViewModel: SignUpViewModel by viewModels()
+        val signUpState by signUpViewModel.state.collectAsStateWithLifecycle()
+
+        LaunchedEffect(signUpState.isSignUpSuccessful, signUpState.signUpError) {
+            handleSignUpState(signUpState, signUpViewModel, navController)
+        }
+
+        RegisterScreen(
+            onRegisterClick = { username, email, password, repeatPassword ->
+                lifecycleScope.launch {
+                    signUpViewModel.signUpWithEmail(username, email, password, repeatPassword)
+                }
+            },
+            navController = navController
+        )
+    }
+
+    private fun handleSignUpState(
+        signUpState: SignUpState,
+        signUpViewModel: SignUpViewModel,
+        navController: NavController
+    ) {
+        when {
+            signUpState.isSignUpSuccessful -> {
+                showToast("Registration successful")
+                navController.navigate("main") {
+                    popUpTo("register") { inclusive = true }
+                }
+                signUpViewModel.resetState()
+            }
+
+            signUpState.signUpError != null -> {
+                showToast("Registration failed: ${signUpState.signUpError}")
+                signUpViewModel.resetState()
+            }
+        }
+    }
+
+    @Composable
+    fun MapScreen() {
+        // Your MapScreen content goes here
+    }
+
+    @Composable
+    fun ChatScreen() {
+        // Your ChatScreen content goes here
+    }
+
+    @Composable
+    private fun ProfileScreenContent(navController: NavController) {
+        val profileViewModel: ProfileViewModel by viewModels()
+        val posts by profileViewModel.posts.collectAsStateWithLifecycle()
+
+        var imageUri by remember { mutableStateOf<Uri?>(null) }
+        val takePicture = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture()
+        ) { isSuccess ->
+            if (isSuccess) {
+                // Upload the image to Firebase Storage
+                imageUri?.let {
+                    lifecycleScope.launch {
+                        val imageUrl = profileViewModel.uploadPhoto(it)
+                        showToast("Image uploaded: $imageUrl")
                     }
                 }
             }
         }
+
+        ProfileScreen(
+            userData = googleAuthUiClient.getSignedInUser(),
+            posts = posts,
+            onAddPostClick = {
+                if (ContextCompat.checkSelfPermission(
+                        applicationContext,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    val uri = FileProvider.getUriForFile(
+                        applicationContext,
+                        "${BuildConfig.APPLICATION_ID}.provider",
+                        createImageFile()
+                    )
+                    imageUri = uri
+                    takePicture.launch(uri)
+                } else {
+                    ActivityCompat.requestPermissions(
+                        this@MainActivity,
+                        arrayOf(
+                            Manifest.permission.CAMERA,
+                        ),
+                        REQUEST_CAMERA_PERMISSION
+                    )
+                }
+            },
+            onSignOut = {
+                lifecycleScope.launch {
+                    profileViewModel.signOut()
+                    showToast("Signed out")
+                    navController.navigate("sign_in") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
+            }
+        )
+    }
+
+    private fun createImageFile(): File {
+        val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        return File.createTempFile(
+            "JPEG_${UUID.randomUUID()}_",
+            ".jpg",
+            storageDir
+        )
+    }
+
+    companion object {
+        private const val REQUEST_CAMERA_PERMISSIOTN = 100
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 }
