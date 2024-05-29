@@ -5,4 +5,5 @@ data class UserData(
     val userName: String?,
     val email: String?,
     val profilePictureUrl: String?,
+    val posts: List<String> = emptyList(),
 )

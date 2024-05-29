@@ -1,5 +1,6 @@
 package com.example.mappi
 
+import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -12,13 +13,24 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.AlertDialog
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
+import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,7 +39,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.mappi.presentation.ui.NavHostSetup
 import com.example.mappi.presentation.ui.main.composables.MainScreen
-import com.example.mappi.presentation.ui.main.composables.ProfileScreen
+import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.presentation.ui.sign_in.GoogleAuthUiClient
 import com.example.mappi.presentation.ui.sign_in.SignInState
@@ -42,11 +54,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
-import android.Manifest
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.core.app.ActivityCompat
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -93,6 +100,8 @@ class MainActivity : ComponentActivity() {
     private fun SignInScreenContent(navController: NavController) {
         val signInViewModel: SignInViewModel by viewModels()
         val signInState by signInViewModel.state.collectAsStateWithLifecycle()
+        val profileViewModel: ProfileViewModel by viewModels()
+
 
         LaunchedEffect(Unit) {
             googleAuthUiClient.getSignedInUser()?.let {
@@ -115,7 +124,7 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(signInState.isSignInSuccessful, signInState.signInError) {
-            handleSignInState(signInState, signInViewModel, navController)
+            handleSignInState(signInState, signInViewModel, profileViewModel, navController)
         }
 
         SignInScreen(
@@ -140,6 +149,7 @@ class MainActivity : ComponentActivity() {
     private fun handleSignInState(
         signInState: SignInState,
         signInViewModel: SignInViewModel,
+        profileViewModel: ProfileViewModel,
         navController: NavController
     ) {
         when {
@@ -148,6 +158,7 @@ class MainActivity : ComponentActivity() {
                 navController.navigate("main") {
                     popUpTo("sign_in") { inclusive = true }
                 }
+                profileViewModel.loadPosts()
                 signInViewModel.resetState()
             }
 
@@ -212,6 +223,7 @@ class MainActivity : ComponentActivity() {
     private fun ProfileScreenContent(navController: NavController) {
         val profileViewModel: ProfileViewModel by viewModels()
         val posts by profileViewModel.posts.collectAsStateWithLifecycle()
+        val profilePictureUrl = profileViewModel.profilePicture.collectAsStateWithLifecycle()
 
         var imageUri by remember { mutableStateOf<Uri?>(null) }
         val takePicture = rememberLauncherForActivityResult(
@@ -228,9 +240,71 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val selectImageLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri ->
+            // Upload the image to Firebase Storage
+            uri?.let {
+                lifecycleScope.launch {
+                    val imageUrl = profileViewModel.uploadPhoto(it, isProfilePicture = true)
+                    showToast("Image uploaded: $imageUrl")
+                }
+            }
+        }
+
+        var showDialog by remember { mutableStateOf(false) }
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                title = { Text("Select Profile Photo") },
+                text = { Text("Choose an option to set your profile photo") },
+                buttons = {
+                    Row(
+                        modifier = Modifier.padding(all = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = {
+                            showDialog = false
+                            selectImageLauncher.launch("image/*")
+                        }) {
+                            Text("Choose from Gallery")
+                        }
+                        TextButton(onClick = {
+                            showDialog = false
+                            if (ContextCompat.checkSelfPermission(
+                                    applicationContext,
+                                    Manifest.permission.CAMERA
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                val uri = FileProvider.getUriForFile(
+                                    applicationContext,
+                                    "${BuildConfig.APPLICATION_ID}.provider",
+                                    createImageFile()
+                                )
+                                imageUri = uri
+                                takePicture.launch(uri)
+                            } else {
+                                ActivityCompat.requestPermissions(
+                                    this@MainActivity,
+                                    arrayOf(
+                                        Manifest.permission.CAMERA,
+                                    ),
+                                    REQUEST_CAMERA_PERMISSION
+                                )
+                            }
+                        }) {
+                            Text("Take a Photo")
+                        }
+                    }
+                }
+            )
+        }
+
+
         ProfileScreen(
             userData = googleAuthUiClient.getSignedInUser(),
             posts = posts,
+            profilePictureUrl = profilePictureUrl.value,
             onAddPostClick = {
                 if (ContextCompat.checkSelfPermission(
                         applicationContext,
@@ -254,6 +328,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             },
+            onProfilePictureClick = { showDialog = true },
             onSignOut = {
                 lifecycleScope.launch {
                     profileViewModel.signOut()
@@ -261,6 +336,7 @@ class MainActivity : ComponentActivity() {
                     navController.navigate("sign_in") {
                         popUpTo("main") { inclusive = true }
                     }
+                    profileViewModel.loadPosts()
                 }
             }
         )
@@ -276,7 +352,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val REQUEST_CAMERA_PERMISSIOTN = 100
+        private const val REQUEST_CAMERA_PERMISSION = 100
     }
 
     private fun showToast(message: String) {

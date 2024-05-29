@@ -17,11 +17,14 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val signOutUseCase: SignOutUseCase,
     private val uploadPhotoUseCase: UploadPhotoUseCase,
-    private val getPostsUseCase: GetPostsUseCase
+    private val getPostsUseCase: GetPostsUseCase,
 ) : ViewModel() {
 
     private val _posts = MutableStateFlow<List<String>>(emptyList())
     val posts: StateFlow<List<String>> get() = _posts
+
+    private val _profilePicture = MutableStateFlow<String?>(null)
+    val profilePicture: StateFlow<String?> get() = _profilePicture
 
     init {
         loadPosts()
@@ -34,12 +37,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun uploadPhoto(uri: Uri) {
+    fun uploadPhoto(uri: Uri, isProfilePicture: Boolean = false) {
         viewModelScope.launch {
             try {
-                val url = uploadPhotoUseCase(uri)
+                val url = uploadPhotoUseCase(uri, isProfilePicture)
                 if (url.isNotEmpty()) {
-                    _posts.value += url
+                    if (isProfilePicture) {
+                        _profilePicture.value = url
+                    } else {
+                        _posts.value += url
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

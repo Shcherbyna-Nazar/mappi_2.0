@@ -5,7 +5,7 @@ import com.example.mappi.domain.repository.ProfileRepository
 import javax.inject.Inject
 
 class UploadPhotoUseCase @Inject constructor(private val repository: ProfileRepository) {
-    suspend operator fun invoke(uri: Uri): String {
-        return repository.uploadPhoto(uri)
+    suspend operator fun invoke(uri: Uri, isProfilePicture: Boolean): String {
+        return repository.uploadPhoto(uri, isProfilePicture)
     }
 }

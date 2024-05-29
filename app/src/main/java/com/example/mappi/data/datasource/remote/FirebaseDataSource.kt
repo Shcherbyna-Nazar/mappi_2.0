@@ -1,10 +1,8 @@
 package com.example.mappi.data.datasource.remote
 
-import android.content.Context
 import android.net.Uri
 import com.example.mappi.data.datasource.remote.dto.UserDto
 import com.example.mappi.util.Resource
-import com.google.android.gms.auth.api.identity.SignInClient
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.storage.StorageReference
@@ -13,12 +11,29 @@ import javax.inject.Inject
 
 class FirebaseDataSource @Inject constructor(
     private val storageReference: StorageReference,
-    private val firebaseAuth: FirebaseAuth,
-    private val oneTapClient: SignInClient,
-    private val context: Context
+    private val firebaseAuth: FirebaseAuth
 ) {
 
-    suspend fun uploadPhoto(uri: Uri): String {
+    suspend fun uploadPhoto(uri: Uri, isProfilePicture: Boolean): String {
+        if (firebaseAuth.currentUser == null) {
+            return ""
+        }
+        if (isProfilePicture) {
+            val photoRef =
+                storageReference.child("profilePictures/${firebaseAuth.currentUser?.uid}.jpg")
+            return try {
+                photoRef.putFile(uri).await()
+                val url = photoRef.downloadUrl.await().toString()
+                val profileUpdate = UserProfileChangeRequest.Builder()
+                    .setPhotoUri(Uri.parse(url))
+                    .build()
+                firebaseAuth.currentUser?.updateProfile(profileUpdate)?.await()
+                url
+            } catch (e: Exception) {
+                e.printStackTrace()
+                ""
+            }
+        }
         val photoRef =
             storageReference.child("posts/${firebaseAuth.currentUser?.uid}/${System.currentTimeMillis()}.jpg")
         return try {
@@ -32,6 +47,10 @@ class FirebaseDataSource @Inject constructor(
 
     suspend fun getPosts(): List<String> {
         return try {
+            if (firebaseAuth.currentUser == null) {
+                return emptyList()
+            }
+
             val listResult =
                 storageReference.child("posts/${firebaseAuth.currentUser?.uid}").listAll().await()
             listResult.items.map { it.downloadUrl.await().toString() }

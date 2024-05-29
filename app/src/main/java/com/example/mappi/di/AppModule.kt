@@ -43,7 +43,7 @@ class AppModule {
         firebaseAuth: FirebaseAuth,
         signInClient: SignInClient,
         context: Context
-    ): FirebaseDataSource = FirebaseDataSource(storageReference,firebaseAuth, signInClient, context)
+    ): FirebaseDataSource = FirebaseDataSource(storageReference, firebaseAuth)
 
     @Provides
     fun provideAuthRepository(dataSource: FirebaseDataSource): AuthRepository =
