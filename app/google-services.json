@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "402571935660",
+    "firebase_url": "https://mappiapp-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "mappiapp",
     "storage_bucket": "mappiapp.appspot.com"
   },
@@ -12,7 +13,20 @@
           "package_name": "com.example.mappi"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "402571935660-jkelc558dgpt6iq8opc0jkhbo4dd0glh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mappi",
+            "certificate_hash": "588f0820233ab86b7751bdc379347dc303502bf3"
+          }
+        },
+        {
+          "client_id": "402571935660-e6lv7oaoskitsv4qrokaq1789u9uh3d0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD5vkNdMcK4jzuwVIJphfDnYVANPp1NoTU"
@@ -20,7 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "402571935660-e6lv7oaoskitsv4qrokaq1789u9uh3d0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
