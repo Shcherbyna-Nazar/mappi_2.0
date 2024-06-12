@@ -20,7 +20,9 @@ fun NavHostSetup(
     mainScreen: @Composable (NavHostController) -> Unit,
     mapScreen: @Composable () -> Unit,
     chatScreen: @Composable () -> Unit,
-    profileScreen: @Composable (NavHostController) -> Unit
+    profileScreen: @Composable (NavHostController) -> Unit,
+    searchFriendsScreen: @Composable (NavHostController) -> Unit,
+    friendsListScreen: @Composable (NavHostController) -> Unit
 ) {
     Scaffold(
         bottomBar = {
@@ -42,9 +44,11 @@ fun NavHostSetup(
             composable("sign_in") { signInScreenContent(navController) }
             composable("register") { registerScreenContent(navController) }
             composable("main") { mainScreen(navController) }
+            composable("search_friends") { searchFriendsScreen(navController) }
             composable(Screen.Map.route) { mapScreen() }
             composable(Screen.Chat.route) { chatScreen() }
             composable(Screen.Profile.route) { profileScreen(navController) }
+            composable("friends_list") { friendsListScreen(navController) }
         }
     }
 }

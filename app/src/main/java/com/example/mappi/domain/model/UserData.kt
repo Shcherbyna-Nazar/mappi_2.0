@@ -6,4 +6,5 @@ data class UserData(
     val email: String?,
     val profilePictureUrl: String?,
     val posts: List<String> = emptyList(),
+    var requestStatus: RequestStatus = RequestStatus.NONE
 )

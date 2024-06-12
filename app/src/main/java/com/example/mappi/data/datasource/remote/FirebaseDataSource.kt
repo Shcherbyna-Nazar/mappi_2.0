@@ -1,59 +1,75 @@
 package com.example.mappi.data.datasource.remote
 
 import android.net.Uri
+import com.example.mappi.data.datasource.remote.dto.FriendRequestDto
+import com.example.mappi.data.datasource.remote.dto.PostDto
 import com.example.mappi.data.datasource.remote.dto.UserDto
+import com.example.mappi.domain.model.Post
+import com.example.mappi.domain.model.RequestStatus
 import com.example.mappi.util.Resource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.StorageReference
+import com.google.firebase.storage.ktx.storageMetadata
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 class FirebaseDataSource @Inject constructor(
     private val storageReference: StorageReference,
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
+    firebaseDatabase: FirebaseDatabase
 ) {
+    private val usersRef = firebaseDatabase.getReference("users")
+    private val friendRequestsRef = firebaseDatabase.getReference("friend_requests")
 
-    suspend fun uploadPhoto(uri: Uri, isProfilePicture: Boolean): String {
-        if (firebaseAuth.currentUser == null) {
-            return ""
+    suspend fun uploadPhoto(
+        uri: Uri,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        isProfilePicture: Boolean
+    ): String {
+        val currentUser = firebaseAuth.currentUser ?: return ""
+        val photoRef = if (isProfilePicture) {
+            storageReference.child("profilePictures/${currentUser.uid}.jpg")
+        } else {
+            storageReference.child("posts/${currentUser.uid}/${System.currentTimeMillis()}.jpg")
         }
-        if (isProfilePicture) {
-            val photoRef =
-                storageReference.child("profilePictures/${firebaseAuth.currentUser?.uid}.jpg")
-            return try {
-                photoRef.putFile(uri).await()
-                val url = photoRef.downloadUrl.await().toString()
+
+        return try {
+            photoRef.putFile(uri).await()
+            latitude?.let {
+                photoRef.updateMetadata(storageMetadata {
+                    setCustomMetadata("latitude", it.toString())
+                    setCustomMetadata("longitude", longitude.toString())
+                }).await()
+            }
+            val url = photoRef.downloadUrl.await().toString()
+            if (isProfilePicture) {
                 val profileUpdate = UserProfileChangeRequest.Builder()
                     .setPhotoUri(Uri.parse(url))
                     .build()
-                firebaseAuth.currentUser?.updateProfile(profileUpdate)?.await()
-                url
-            } catch (e: Exception) {
-                e.printStackTrace()
-                ""
+                currentUser.updateProfile(profileUpdate).await()
+                usersRef.child(currentUser.uid).child("profilePictureUrl").setValue(url).await()
             }
-        }
-        val photoRef =
-            storageReference.child("posts/${firebaseAuth.currentUser?.uid}/${System.currentTimeMillis()}.jpg")
-        return try {
-            photoRef.putFile(uri).await()
-            photoRef.downloadUrl.await().toString()
+            url
         } catch (e: Exception) {
             e.printStackTrace()
             ""
         }
     }
 
-    suspend fun getPosts(): List<String> {
+    suspend fun getPosts(): List<PostDto> {
+        val currentUser = firebaseAuth.currentUser ?: return emptyList()
         return try {
-            if (firebaseAuth.currentUser == null) {
-                return emptyList()
+            val listResult = storageReference.child("posts/${currentUser.uid}").listAll().await()
+            listResult.items.map {
+                val url = it.downloadUrl.await().toString()
+                val metadata = it.metadata.await()
+                val latitude = metadata.getCustomMetadata("latitude")?.toDouble() ?: 0.0
+                val longitude = metadata.getCustomMetadata("longitude")?.toDouble() ?: 0.0
+                PostDto(url, latitude, longitude)
             }
-
-            val listResult =
-                storageReference.child("posts/${firebaseAuth.currentUser?.uid}").listAll().await()
-            listResult.items.map { it.downloadUrl.await().toString() }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -86,6 +102,9 @@ class FirebaseDataSource @Inject constructor(
                     .setDisplayName(name)
                     .build()
                 user.updateProfile(profileUpdate).await()
+
+                usersRef.child(user.uid)
+                    .setValue(UserDto(user.uid, name, email, user.photoUrl.toString()))
 
                 Resource.Success(
                     UserDto(
@@ -121,4 +140,96 @@ class FirebaseDataSource @Inject constructor(
         }
     }
 
+    suspend fun deletePost(post: Post) {
+        val currentUser = firebaseAuth.currentUser ?: return
+        val fileName = Uri.parse(post.url).lastPathSegment ?: return
+        val photoRef = storageReference.child("posts/${currentUser.uid}/$fileName")
+        try {
+            photoRef.delete().await()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun getFriends(): List<UserDto> {
+        val userId = firebaseAuth.currentUser?.uid ?: return emptyList()
+        val friendsListSnapshot = usersRef.child(userId).child("friends").get().await()
+        val friendsIds = friendsListSnapshot.children.map { it.key.orEmpty() }
+        return friendsIds.mapNotNull { friendId ->
+            usersRef.child(friendId).get().await().getValue(UserDto::class.java)
+        }
+    }
+
+    suspend fun searchUsers(query: String): List<UserDto> {
+        val currentUser = firebaseAuth.currentUser ?: return emptyList()
+        return try {
+            val friendsListSnapshot = usersRef.child(currentUser.uid).child("friends").get().await()
+            val friendsIds = friendsListSnapshot.children.map { it.key.orEmpty() }
+
+            val resultSnapshot = usersRef.orderByChild("userName").startAt(query).endAt(query + "\uf8ff").get().await()
+            val userDtos = resultSnapshot.children.mapNotNull {
+                it.getValue(UserDto::class.java)
+            }.filter { it.userId != currentUser.uid }
+
+            userDtos.map { user ->
+                val sentRequestSnapshot = friendRequestsRef.orderByChild("fromUserId").equalTo(currentUser.uid).get().await()
+                val receivedRequestSnapshot = friendRequestsRef.orderByChild("toUserId").equalTo(currentUser.uid).get().await()
+
+                val requestStatus = when {
+                    friendsIds.contains(user.userId) -> RequestStatus.ACCEPTED
+                    sentRequestSnapshot.children.any { it.child("toUserId").value == user.userId && it.child("status").value == RequestStatus.SENT.name } -> RequestStatus.SENT
+                    receivedRequestSnapshot.children.any { it.child("fromUserId").value == user.userId && it.child("status").value == RequestStatus.SENT.name } -> RequestStatus.RECEIVED
+                    else -> RequestStatus.NONE
+                }
+                user.copy(requestStatus = requestStatus)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    suspend fun sendFriendRequest(toUserId: String) {
+        val fromUserId = firebaseAuth.currentUser?.uid ?: return
+        val requestId = friendRequestsRef.push().key ?: return
+        val request = FriendRequestDto(
+            requestId = requestId,
+            fromUserId = fromUserId,
+            toUserId = toUserId,
+            status = RequestStatus.SENT
+        )
+        friendRequestsRef.child(requestId).setValue(request).await()
+    }
+
+    suspend fun acceptFriendRequest(requestId: String) {
+        val requestSnapshot = friendRequestsRef.child(requestId).get().await()
+        val fromUserId = requestSnapshot.child("fromUserId").value as? String ?: return
+        val toUserId = requestSnapshot.child("toUserId").value as? String ?: return
+
+        usersRef.child(fromUserId).child("friends").child(toUserId).setValue(true).await()
+        usersRef.child(toUserId).child("friends").child(fromUserId).setValue(true).await()
+        friendRequestsRef.child(requestId).removeValue().await()
+    }
+
+    suspend fun rejectFriendRequest(requestId: String) {
+        friendRequestsRef.child(requestId).removeValue().await()
+    }
+
+    suspend fun getFriendRequests(): List<FriendRequestDto> {
+        val userId = firebaseAuth.currentUser?.uid ?: return emptyList()
+        val receivedRequestsSnapshot =
+            friendRequestsRef.orderByChild("toUserId").equalTo(userId).get().await()
+        return receivedRequestsSnapshot.children.mapNotNull {
+            it.getValue(FriendRequestDto::class.java)
+        }
+    }
+
+    suspend fun getUserById(userId: String): UserDto? {
+        return try {
+            usersRef.child(userId).get().await().getValue(UserDto::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 }

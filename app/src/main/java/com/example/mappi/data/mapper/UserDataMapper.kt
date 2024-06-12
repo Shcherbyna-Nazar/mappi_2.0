@@ -9,7 +9,8 @@ object UserDataMapper {
             userId = userDto.userId,
             userName = userDto.userName,
             email = userDto.email,
-            profilePictureUrl = userDto.profilePictureUrl
+            profilePictureUrl = userDto.profilePictureUrl,
+            requestStatus = userDto.requestStatus
         )
     }
 }

@@ -1,5 +1,6 @@
 package com.example.mappi
 
+import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,13 +14,19 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
+import androidx.compose.material.Tab
+import androidx.compose.material.TabRow
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
@@ -27,8 +34,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -38,6 +47,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.mappi.presentation.ui.NavHostSetup
+import com.example.mappi.presentation.ui.friends.composable.FriendRequestsScreen
+import com.example.mappi.presentation.ui.friends.composable.FriendsListScreen
+import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreen
 import com.example.mappi.presentation.ui.main.composables.MainScreen
 import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
@@ -49,6 +61,8 @@ import com.example.mappi.presentation.ui.sign_up.SignUpState
 import com.example.mappi.presentation.ui.sign_up.composables.RegisterScreen
 import com.example.mappi.presentation.ui.sign_up.viewmodel.SignUpViewModel
 import com.example.mappi.presentation.ui.theme.MappiTheme
+import com.example.mappi.util.LocationUtils
+import com.example.mappi.util.PermissionUtils
 import com.google.android.gms.auth.api.identity.Identity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -65,8 +79,17 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private lateinit var locationUtils: LocationUtils
+    private lateinit var permissionUtils: PermissionUtils
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        locationUtils = LocationUtils(this)
+        permissionUtils = PermissionUtils(this)
+
+        permissionUtils.checkLocationPermission()
+
         setContent {
             MappiTheme {
                 Surface(
@@ -81,18 +104,27 @@ class MainActivity : ComponentActivity() {
                         mainScreen = {
                             MainScreen(
                                 navController,
-                                mapScreen = { MapScreen() },
+                                mapScreen = { MapScreenContent() },
                                 chatScreen = { ChatScreen() },
                                 profileScreen = { ProfileScreenContent(navController) },
                             )
                         },
-                        mapScreen = { MapScreen() },
+                        mapScreen = { MapScreenContent() },
                         chatScreen = { ChatScreen() },
+                        searchFriendsScreen = { SearchFriendsScreenContent() },
+                        friendsListScreen = { FriendsListScreenContent(navController) },
                         profileScreen = { ProfileScreenContent(navController) },
                     )
                 }
             }
         }
+    }
+
+    @Composable
+    private fun FriendsListScreenContent(navController: NavController) {
+        FriendsListScreen(
+            onBackClick = { navController.popBackStack() }
+        )
     }
 
     @OptIn(ExperimentalAnimationApi::class)
@@ -102,7 +134,6 @@ class MainActivity : ComponentActivity() {
         val signInState by signInViewModel.state.collectAsStateWithLifecycle()
         val profileViewModel: ProfileViewModel by viewModels()
 
-
         LaunchedEffect(Unit) {
             googleAuthUiClient.getSignedInUser()?.let {
                 navController.navigate("main") {
@@ -111,17 +142,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val launcher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartIntentSenderForResult()
-        ) { result ->
-            if (result.resultCode == RESULT_OK) {
-                lifecycleScope.launch {
-                    val signInResult =
-                        googleAuthUiClient.signInWithIntent(result.data ?: return@launch)
-                    signInViewModel.onSignInResult(signInResult)
+        val launcher =
+            rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    lifecycleScope.launch {
+                        val signInResult =
+                            googleAuthUiClient.signInWithIntent(result.data ?: return@launch)
+                        signInViewModel.onSignInResult(signInResult)
+                    }
                 }
             }
-        }
 
         LaunchedEffect(signInState.isSignInSuccessful, signInState.signInError) {
             handleSignInState(signInState, signInViewModel, profileViewModel, navController)
@@ -138,9 +168,7 @@ class MainActivity : ComponentActivity() {
                 }
             },
             onEmailSignInClick = { email, password ->
-                lifecycleScope.launch {
-                    signInViewModel.signInWithEmail(email, password)
-                }
+                lifecycleScope.launch { signInViewModel.signInWithEmail(email, password) }
             },
             navController = navController
         )
@@ -158,7 +186,7 @@ class MainActivity : ComponentActivity() {
                 navController.navigate("main") {
                     popUpTo("sign_in") { inclusive = true }
                 }
-                profileViewModel.loadPosts()
+                profileViewModel.loadProfile()
                 signInViewModel.resetState()
             }
 
@@ -181,7 +209,12 @@ class MainActivity : ComponentActivity() {
         RegisterScreen(
             onRegisterClick = { username, email, password, repeatPassword ->
                 lifecycleScope.launch {
-                    signUpViewModel.signUpWithEmail(username, email, password, repeatPassword)
+                    signUpViewModel.signUpWithEmail(
+                        username,
+                        email,
+                        password,
+                        repeatPassword
+                    )
                 }
             },
             navController = navController
@@ -210,8 +243,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun MapScreen() {
-        // Your MapScreen content goes here
+    fun MapScreenContent() {
+        val profileViewModel: ProfileViewModel by viewModels()
+        val state by profileViewModel.profileState.collectAsStateWithLifecycle()
+
+        MapScreen(applicationContext, posts = state.posts)
     }
 
     @Composable
@@ -222,35 +258,53 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun ProfileScreenContent(navController: NavController) {
         val profileViewModel: ProfileViewModel by viewModels()
-        val posts by profileViewModel.posts.collectAsStateWithLifecycle()
-        val profilePictureUrl = profileViewModel.profilePicture.collectAsStateWithLifecycle()
-
         var imageUri by remember { mutableStateOf<Uri?>(null) }
-        val takePicture = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicture()
-        ) { isSuccess ->
-            if (isSuccess) {
-                // Upload the image to Firebase Storage
-                imageUri?.let {
-                    lifecycleScope.launch {
-                        val imageUrl = profileViewModel.uploadPhoto(it)
-                        showToast("Image uploaded: $imageUrl")
+        var isProfileImage by remember { mutableStateOf(false) }
+
+        val takePicture =
+            rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { isSuccess ->
+                if (isSuccess) {
+                    imageUri?.let {
+                        if (isProfileImage) {
+                            lifecycleScope.launch {
+                                val imageUrl = profileViewModel.uploadPhoto(
+                                    it,
+                                    0.0,
+                                    0.0,
+                                    isProfilePicture = true
+                                )
+                                showToast("Profile picture uploaded: $imageUrl")
+                            }
+                        } else {
+                            locationUtils.getCurrentLocation { location ->
+                                lifecycleScope.launch {
+                                    profileViewModel.uploadPhoto(
+                                        it,
+                                        location.latitude,
+                                        location.longitude
+                                    )
+                                    showToast("Image uploaded with location")
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        val selectImageLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri ->
-            // Upload the image to Firebase Storage
-            uri?.let {
-                lifecycleScope.launch {
-                    val imageUrl = profileViewModel.uploadPhoto(it, isProfilePicture = true)
-                    showToast("Image uploaded: $imageUrl")
+        val selectImageLauncher =
+            rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                uri?.let {
+                    lifecycleScope.launch {
+                        val imageUrl = profileViewModel.uploadPhoto(
+                            it,
+                            0.0,
+                            0.0,
+                            isProfilePicture = true
+                        )
+                        showToast("Profile picture uploaded: $imageUrl")
+                    }
                 }
             }
-        }
 
         var showDialog by remember { mutableStateOf(false) }
         if (showDialog) {
@@ -266,11 +320,10 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = {
                             showDialog = false
                             selectImageLauncher.launch("image/*")
-                        }) {
-                            Text("Choose from Gallery")
-                        }
+                        }) { Text("Choose from Gallery") }
                         TextButton(onClick = {
                             showDialog = false
+                            isProfileImage = true
                             if (ContextCompat.checkSelfPermission(
                                     applicationContext,
                                     Manifest.permission.CAMERA
@@ -286,49 +339,50 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 ActivityCompat.requestPermissions(
                                     this@MainActivity,
-                                    arrayOf(
-                                        Manifest.permission.CAMERA,
-                                    ),
+                                    arrayOf(Manifest.permission.CAMERA),
                                     REQUEST_CAMERA_PERMISSION
                                 )
                             }
-                        }) {
-                            Text("Take a Photo")
-                        }
+                        }) { Text("Take a Photo") }
                     }
                 }
             )
         }
 
-
         ProfileScreen(
-            userData = googleAuthUiClient.getSignedInUser(),
-            posts = posts,
-            profilePictureUrl = profilePictureUrl.value,
+            profileViewModel = profileViewModel,
             onAddPostClick = {
+                isProfileImage = false
                 if (ContextCompat.checkSelfPermission(
                         applicationContext,
                         Manifest.permission.CAMERA
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
-                    val uri = FileProvider.getUriForFile(
-                        applicationContext,
-                        "${BuildConfig.APPLICATION_ID}.provider",
-                        createImageFile()
-                    )
-                    imageUri = uri
-                    takePicture.launch(uri)
+                    locationUtils.checkLocationSettings {
+                        val uri = FileProvider.getUriForFile(
+                            applicationContext,
+                            "${BuildConfig.APPLICATION_ID}.provider",
+                            createImageFile()
+                        )
+                        imageUri = uri
+                        takePicture.launch(uri)
+                    }
                 } else {
                     ActivityCompat.requestPermissions(
                         this@MainActivity,
-                        arrayOf(
-                            Manifest.permission.CAMERA,
-                        ),
+                        arrayOf(Manifest.permission.CAMERA),
                         REQUEST_CAMERA_PERMISSION
                     )
                 }
             },
             onProfilePictureClick = { showDialog = true },
+            onSearchFriendsClick = { navController.navigate("search_friends") },
+            onDeletePostClick = { post ->
+                lifecycleScope.launch {
+                    profileViewModel.deletePost(post)
+                }
+            },
+            onFriendsClick = { navController.navigate("friends_list") },
             onSignOut = {
                 lifecycleScope.launch {
                     profileViewModel.signOut()
@@ -336,23 +390,60 @@ class MainActivity : ComponentActivity() {
                     navController.navigate("sign_in") {
                         popUpTo("main") { inclusive = true }
                     }
-                    profileViewModel.loadPosts()
                 }
             }
         )
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun SearchFriendsScreenContent() {
+        val pagerState = rememberPagerState(initialPage = 0)
+        val coroutineScope = rememberCoroutineScope()
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            TabRow(
+                backgroundColor = Color(0xFF0F3C3B),
+                contentColor = Color.White,
+                selectedTabIndex = pagerState.currentPage
+            ) {
+                Tab(
+                    text = { Text("Search Friends") },
+                    selected = pagerState.currentPage == 0,
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(0)
+                        }
+                    }
+                )
+                Tab(
+                    text = { Text("Friend Requests") },
+                    selected = pagerState.currentPage == 1,
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(1)
+                        }
+                    }
+                )
+            }
+            HorizontalPager(pageCount = 2, state = pagerState) { page ->
+                when (page) {
+                    0 -> SearchFriendsScreen()
+                    1 -> FriendRequestsScreen()
+                }
+            }
+        }
+    }
+
+
     private fun createImageFile(): File {
         val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        return File.createTempFile(
-            "JPEG_${UUID.randomUUID()}_",
-            ".jpg",
-            storageDir
-        )
+        return File.createTempFile("JPEG_${UUID.randomUUID()}_", ".jpg", storageDir)
     }
 
     companion object {
         private const val REQUEST_CAMERA_PERMISSION = 100
+        internal const val REQUEST_CHECK_SETTINGS = 101
     }
 
     private fun showToast(message: String) {

@@ -4,12 +4,15 @@ import android.content.Context
 import com.example.mappi.data.datasource.remote.FirebaseDataSource
 import com.example.mappi.data.repository.FirebaseAuthRepository
 import com.example.mappi.data.repository.FirebaseProfileRepository
+import com.example.mappi.data.repository.FirebaseUserRepository
 import com.example.mappi.domain.repository.AuthRepository
 import com.example.mappi.domain.repository.ProfileRepository
+import com.example.mappi.domain.repository.UserRepository
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.identity.SignInClient
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageReference
@@ -27,6 +30,9 @@ class AppModule {
     fun provideFirebaseAuth(): FirebaseAuth = Firebase.auth
 
     @Provides
+    fun provideFirebaseDatabase(): FirebaseDatabase = FirebaseDatabase.getInstance()
+
+    @Provides
     fun provideSignInClient(@ApplicationContext context: Context): SignInClient =
         Identity.getSignInClient(context)
 
@@ -41,9 +47,8 @@ class AppModule {
     fun provideFirebaseDataSource(
         storageReference: StorageReference,
         firebaseAuth: FirebaseAuth,
-        signInClient: SignInClient,
-        context: Context
-    ): FirebaseDataSource = FirebaseDataSource(storageReference, firebaseAuth)
+        firebaseDatabase: FirebaseDatabase,
+    ): FirebaseDataSource = FirebaseDataSource(storageReference, firebaseAuth, firebaseDatabase)
 
     @Provides
     fun provideAuthRepository(dataSource: FirebaseDataSource): AuthRepository =
@@ -52,5 +57,9 @@ class AppModule {
     @Provides
     fun provideProfileRepository(dataSource: FirebaseDataSource): ProfileRepository =
         FirebaseProfileRepository(dataSource)
+
+    @Provides
+    fun provideUserRepository(dataSource: FirebaseDataSource): UserRepository =
+        FirebaseUserRepository(dataSource)
 
 }
