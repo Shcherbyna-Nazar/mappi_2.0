@@ -19,6 +19,7 @@ class FriendsViewModel @Inject constructor(
     private val acceptRequestUseCase: AcceptRequestUseCase,
     private val rejectRequestUseCase: RejectRequestUseCase,
     private val getFriendRequestsUseCase: GetFriendRequestsUseCase,
+    private val deleteFriendUseCase: DeleteFriendUseCase
 ) : ViewModel() {
     private val _friends = MutableStateFlow<List<UserData>>(emptyList())
     val friends: StateFlow<List<UserData>> get() = _friends
@@ -66,6 +67,13 @@ class FriendsViewModel @Inject constructor(
         }
     }
 
+    fun deleteFriend(friendId: String) {
+        launchWithErrorHandler {
+            deleteFriendUseCase(friendId)
+            _friends.value = _friends.value.filter { it.userId != friendId }
+        }
+    }
+
     private fun refreshData() {
         launchWithErrorHandler {
             _friends.value = getFriendsUseCase()
@@ -76,6 +84,7 @@ class FriendsViewModel @Inject constructor(
     private fun removeFriendRequest(requestId: String) {
         _friendRequests.value = _friendRequests.value.filter { it.requestId != requestId }
     }
+
 
     private fun launchWithErrorHandler(block: suspend () -> Unit) {
         viewModelScope.launch {

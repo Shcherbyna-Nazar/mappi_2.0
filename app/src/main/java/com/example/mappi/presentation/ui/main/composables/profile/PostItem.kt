@@ -46,9 +46,11 @@ fun PostItem(post: Post, onClick: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = Color.Green,
+                        color = Color(0xFF0F3C3B),
                         strokeWidth = 4.dp,
-                        modifier = Modifier.size(50.dp).clip(CircleShape)
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
                     )
                 }
             },

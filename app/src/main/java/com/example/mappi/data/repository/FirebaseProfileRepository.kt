@@ -23,4 +23,8 @@ class FirebaseProfileRepository(private val dataSource: FirebaseDataSource) : Pr
     override suspend fun getPosts(): List<Post> {
         return dataSource.getPosts().map { PostMapper.mapToDomain(it) }
     }
+
+    override suspend fun getFriendPosts(): List<Post> {
+        return dataSource.getLast10PostsFromFriends().map { PostMapper.mapToDomain(it) }
+    }
 }

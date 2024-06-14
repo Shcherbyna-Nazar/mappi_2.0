@@ -244,10 +244,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun MapScreenContent() {
-        val profileViewModel: ProfileViewModel by viewModels()
-        val state by profileViewModel.profileState.collectAsStateWithLifecycle()
-
-        MapScreen(applicationContext, posts = state.posts)
+        MapScreen(applicationContext)
     }
 
     @Composable

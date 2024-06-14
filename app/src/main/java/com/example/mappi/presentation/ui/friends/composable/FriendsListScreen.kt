@@ -1,28 +1,14 @@
 package com.example.mappi.presentation.ui.friends.composable
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Button
-import androidx.compose.material.Card
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Scaffold
-import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -72,7 +58,10 @@ fun FriendsListScreen(
                             .background(Color.White)
                     ) {
                         items(friendsState) { friend ->
-                            FriendItem(user = friend)
+                            FriendListItem(
+                                user = friend,
+                                onDeleteClick = { friendsViewModel.deleteFriend(friend.userId) }
+                            )
                         }
                     }
                 } else {
@@ -90,7 +79,7 @@ fun FriendsListScreen(
 }
 
 @Composable
-fun FriendItem(user: UserData, onSendRequest: (() -> Unit)? = null) {
+fun FriendListItem(user: UserData, onDeleteClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,12 +104,9 @@ fun FriendItem(user: UserData, onSendRequest: (() -> Unit)? = null) {
                 Text(user.userName ?: "Unknown", style = MaterialTheme.typography.subtitle1)
                 Text(user.email ?: "", style = MaterialTheme.typography.body2, color = Color.Gray)
             }
-            if (onSendRequest != null) {
-                Button(onClick = onSendRequest) {
-                    Text("Add Friend")
-                }
+            IconButton(onClick = onDeleteClick) {
+                Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Friend", tint = Color.Red)
             }
         }
     }
 }
-

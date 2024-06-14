@@ -11,4 +11,5 @@ interface UserRepository {
     suspend fun rejectRequest(friendId: String)
     suspend fun getFriendRequests(): List<FriendRequest>
     suspend fun getUserById(userId: String): UserData
+    suspend fun deleteFriend(friendId: String)
 }
