@@ -54,4 +54,9 @@ class FirebaseUserRepository(
         val userDto = dataSource.getUserById(userId) ?: UserDto()
         return UserDataMapper.mapToDomain(userDto)
     }
+
+    override suspend fun deleteFriend(friendId: String) {
+        dataSource.deleteFriend(friendId)
+    }
 }
+

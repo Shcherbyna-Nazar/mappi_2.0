@@ -55,7 +55,6 @@ import com.example.mappi.domain.model.Post
 import com.example.mappi.presentation.ui.friends.viewmodel.FriendsViewModel
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 
-
 @Composable
 fun ProfileScreen(
     profileViewModel: ProfileViewModel,
@@ -78,15 +77,19 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
+        val maxWidth = constraints.maxWidth.toFloat()
+        val aspectRatio = 185f / 32f
+        val height = (maxWidth / aspectRatio).dp
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top,
             modifier = Modifier
                 .fillMaxSize()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(height)
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.flowers),
@@ -175,12 +178,11 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .offset(y = (-40).dp),
                 elevation = 4.dp,
                 backgroundColor = Color.White,
                 shape = RoundedCornerShape(15.dp)
@@ -208,6 +210,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 16.dp)
+                    .offset(y = (-40).dp)
             ) {
                 items(profileState.posts) { post ->
                     PostItem(post = post, onClick = { selectedPost = post })
@@ -287,7 +290,7 @@ fun ZoomableImage(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = Color.Green,
+                        color = Color(0xFF0F3C3B),
                         strokeWidth = 4.dp,
                         modifier = Modifier
                             .size(50.dp)
@@ -318,7 +321,7 @@ fun ZoomableImage(
 fun FullScreenDialog(
     imageUrl: String,
     onDismissRequest: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: (() -> Unit)?
 ) {
     Dialog(onDismissRequest = onDismissRequest) {
         Box(
@@ -330,18 +333,20 @@ fun FullScreenDialog(
                 imageUrl = imageUrl,
                 modifier = Modifier.fillMaxSize()
             )
-            IconButton(
-                onClick = onDeleteClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.baseline_delete_24),
-                    contentDescription = "Delete Icon",
-                    tint = Color.Red,
-                    modifier = Modifier.size(30.dp)
-                )
+            if (onDeleteClick != null) {
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.baseline_delete_24),
+                        contentDescription = "Delete Icon",
+                        tint = Color.Red,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
             }
         }
     }

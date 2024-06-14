@@ -12,6 +12,7 @@ interface ProfileRepository {
     ): String
 
     suspend fun getPosts(): List<Post>
-    suspend fun deletePost(post: Post): Unit
+    suspend fun deletePost(post: Post)
+    suspend fun getFriendPosts(): List<Post>
 
 }

@@ -166,19 +166,35 @@ class FirebaseDataSource @Inject constructor(
             val friendsListSnapshot = usersRef.child(currentUser.uid).child("friends").get().await()
             val friendsIds = friendsListSnapshot.children.map { it.key.orEmpty() }
 
-            val resultSnapshot = usersRef.orderByChild("userName").startAt(query).endAt(query + "\uf8ff").get().await()
+            val resultSnapshot =
+                usersRef.orderByChild("userName").startAt(query).endAt(query + "\uf8ff").get()
+                    .await()
             val userDtos = resultSnapshot.children.mapNotNull {
                 it.getValue(UserDto::class.java)
             }.filter { it.userId != currentUser.uid }
 
             userDtos.map { user ->
-                val sentRequestSnapshot = friendRequestsRef.orderByChild("fromUserId").equalTo(currentUser.uid).get().await()
-                val receivedRequestSnapshot = friendRequestsRef.orderByChild("toUserId").equalTo(currentUser.uid).get().await()
+                val sentRequestSnapshot =
+                    friendRequestsRef.orderByChild("fromUserId").equalTo(currentUser.uid).get()
+                        .await()
+                val receivedRequestSnapshot =
+                    friendRequestsRef.orderByChild("toUserId").equalTo(currentUser.uid).get()
+                        .await()
 
                 val requestStatus = when {
                     friendsIds.contains(user.userId) -> RequestStatus.ACCEPTED
-                    sentRequestSnapshot.children.any { it.child("toUserId").value == user.userId && it.child("status").value == RequestStatus.SENT.name } -> RequestStatus.SENT
-                    receivedRequestSnapshot.children.any { it.child("fromUserId").value == user.userId && it.child("status").value == RequestStatus.SENT.name } -> RequestStatus.RECEIVED
+                    sentRequestSnapshot.children.any {
+                        it.child("toUserId").value == user.userId && it.child(
+                            "status"
+                        ).value == RequestStatus.SENT.name
+                    } -> RequestStatus.SENT
+
+                    receivedRequestSnapshot.children.any {
+                        it.child("fromUserId").value == user.userId && it.child(
+                            "status"
+                        ).value == RequestStatus.SENT.name
+                    } -> RequestStatus.RECEIVED
+
                     else -> RequestStatus.NONE
                 }
                 user.copy(requestStatus = requestStatus)
@@ -232,4 +248,31 @@ class FirebaseDataSource @Inject constructor(
             null
         }
     }
+
+    suspend fun getLast10PostsFromFriends(): List<PostDto> {
+        val currentUser = firebaseAuth.currentUser ?: return emptyList()
+        val friendsIds = usersRef.child(currentUser.uid).child("friends").get()
+            .await().children.map { it.key.orEmpty() }
+        val posts = mutableListOf<PostDto>()
+
+        friendsIds.forEach { friendId ->
+            val friendPosts = storageReference.child("posts/$friendId").listAll().await()
+            friendPosts.items.take(5).map {
+                val url = it.downloadUrl.await().toString()
+                val metadata = it.metadata.await()
+                val latitude = metadata.getCustomMetadata("latitude")?.toDouble() ?: 0.0
+                val longitude = metadata.getCustomMetadata("longitude")?.toDouble() ?: 0.0
+                posts.add(PostDto(url, latitude, longitude))
+            }
+        }
+
+        return posts
+    }
+
+    suspend fun deleteFriend(friendId: String) {
+        val userId = firebaseAuth.currentUser?.uid ?: return
+        usersRef.child(userId).child("friends").child(friendId).removeValue().await()
+        usersRef.child(friendId).child("friends").child(userId).removeValue().await()
+    }
+
 }

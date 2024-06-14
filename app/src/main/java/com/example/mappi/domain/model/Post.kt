@@ -9,7 +9,7 @@ data class Post(
 ) {
     val id = generateId()
 
-    private fun generateId(): Int {
-        return url.hashCode() + latitude.hashCode() + longitude.hashCode() + Random.nextInt()
+    private fun generateId(): Long {
+        return (url.hashCode() + latitude.hashCode() + longitude.hashCode() + Random.nextInt(1000)).toLong()
     }
 }
