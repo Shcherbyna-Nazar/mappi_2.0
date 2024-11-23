@@ -1,6 +1,7 @@
 package com.example.mappi.presentation.ui.decisions.compose
 
 import android.location.Location
+import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -61,12 +62,6 @@ fun DecisionsScreen(
     val restaurant by viewModel.restaurantRecommendation.collectAsState()
     val error by viewModel.error.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-
-    LaunchedEffect(viewModel.nearbyRestaurants) {
-        if (!isLoading) {
-            viewModel.fetchRecommendation()
-        }
-    }
 
     Box(
         modifier = Modifier

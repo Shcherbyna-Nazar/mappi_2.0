@@ -12,6 +12,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.log
 
 @HiltViewModel
 class DecisionsViewModel @Inject constructor(
@@ -46,6 +47,7 @@ class DecisionsViewModel @Inject constructor(
                 _error.value = e.localizedMessage ?: "An unexpected error occurred"
             } finally {
                 _isLoading.value = false
+                fetchRecommendation()
             }
         }
     }
@@ -54,6 +56,7 @@ class DecisionsViewModel @Inject constructor(
      * Fetches a restaurant recommendation based on the user's current location.
      * Updates [_restaurantRecommendation] with the recommended restaurant.
      */
+    @Synchronized
     fun fetchRecommendation() {
         if (_isLoading.value) return
         viewModelScope.launch {
@@ -66,6 +69,10 @@ class DecisionsViewModel @Inject constructor(
                 _error.value = e.localizedMessage ?: "An unexpected error occurred"
             } finally {
                 _isLoading.value = false
+                Log.e(
+                    "DecisionsViewModel",
+                    "fetchRecommendation: ${_restaurantRecommendation.value?.name}"
+                )
             }
         }
     }
