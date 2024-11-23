@@ -19,7 +19,7 @@ fun NavHostSetup(
     registerScreenContent: @Composable (NavHostController) -> Unit,
     mainScreen: @Composable (NavHostController) -> Unit,
     mapScreen: @Composable () -> Unit,
-    chatScreen: @Composable () -> Unit,
+    recommendationScreen: @Composable () -> Unit,
     profileScreen: @Composable (NavHostController) -> Unit,
     searchFriendsScreen: @Composable (NavHostController) -> Unit,
     friendsListScreen: @Composable (NavHostController) -> Unit
@@ -28,7 +28,7 @@ fun NavHostSetup(
         bottomBar = {
             if (currentRoute(navController) in listOf(
                     Screen.Map.route,
-                    Screen.Chat.route,
+                    Screen.Recommendations.route,
                     Screen.Profile.route
                 )
             ) {
@@ -46,7 +46,7 @@ fun NavHostSetup(
             composable("main") { mainScreen(navController) }
             composable("search_friends") { searchFriendsScreen(navController) }
             composable(Screen.Map.route) { mapScreen() }
-            composable(Screen.Chat.route) { chatScreen() }
+            composable(Screen.Recommendations.route) { recommendationScreen() }
             composable(Screen.Profile.route) { profileScreen(navController) }
             composable("friends_list") { friendsListScreen(navController) }
         }

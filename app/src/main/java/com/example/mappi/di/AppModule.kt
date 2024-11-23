@@ -3,9 +3,11 @@ package com.example.mappi.di
 import android.content.Context
 import com.example.mappi.data.datasource.remote.FirebaseDataSource
 import com.example.mappi.data.repository.FirebaseAuthRepository
+import com.example.mappi.data.repository.FirebaseDecisionRepository
 import com.example.mappi.data.repository.FirebaseProfileRepository
 import com.example.mappi.data.repository.FirebaseUserRepository
 import com.example.mappi.domain.repository.AuthRepository
+import com.example.mappi.domain.repository.DecisionRepository
 import com.example.mappi.domain.repository.ProfileRepository
 import com.example.mappi.domain.repository.UserRepository
 import com.google.android.gms.auth.api.identity.Identity
@@ -62,4 +64,7 @@ class AppModule {
     fun provideUserRepository(dataSource: FirebaseDataSource): UserRepository =
         FirebaseUserRepository(dataSource)
 
+    @Provides
+    fun provideDecisionRepository(dataSource: FirebaseDataSource): DecisionRepository =
+        FirebaseDecisionRepository(dataSource)
 }

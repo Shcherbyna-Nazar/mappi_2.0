@@ -1,6 +1,7 @@
 package com.example.mappi.presentation.ui.main.viewmodel
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mappi.domain.model.Post
@@ -34,14 +35,18 @@ class ProfileViewModel @Inject constructor(
 
     fun loadProfile() {
         viewModelScope.launch {
+            _profileState.value = _profileState.value.copy(isLoading = true)
             try {
-                val userData = getSignedInUser()
+                val userData = getSignedInUser() ?: return@launch
+                Log.e("ProfileViewModel", "loadProfile start")
                 val posts = getPostsUseCase()
                 _profileState.value = _profileState.value.copy(
                     userData = userData,
                     posts = posts,
-                    profilePictureUrl = userData?.profilePictureUrl
+                    profilePictureUrl = userData.profilePictureUrl,
+                    isLoading = false
                 )
+                Log.e("ProfileViewModel", "loadProfile done")
             } catch (e: Exception) {
                 _profileState.value = _profileState.value.copy(error = e.message)
             }

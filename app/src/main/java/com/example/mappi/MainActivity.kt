@@ -1,8 +1,8 @@
 package com.example.mappi
 
-import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import android.Manifest
 import android.content.pm.PackageManager
+import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -47,10 +47,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.mappi.presentation.ui.NavHostSetup
+import com.example.mappi.presentation.ui.decisions.compose.DecisionsScreen
+import com.example.mappi.presentation.ui.decisions.viewmodel.DecisionsViewModel
 import com.example.mappi.presentation.ui.friends.composable.FriendRequestsScreen
 import com.example.mappi.presentation.ui.friends.composable.FriendsListScreen
 import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreen
 import com.example.mappi.presentation.ui.main.composables.MainScreen
+import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.presentation.ui.sign_in.GoogleAuthUiClient
@@ -64,6 +67,7 @@ import com.example.mappi.presentation.ui.theme.MappiTheme
 import com.example.mappi.util.LocationUtils
 import com.example.mappi.util.PermissionUtils
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.libraries.places.api.Places
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.io.File
@@ -81,14 +85,21 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var locationUtils: LocationUtils
     private lateinit var permissionUtils: PermissionUtils
+    private val decisionViewModel: DecisionsViewModel by viewModels()
+    private val profileViewModel: ProfileViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         locationUtils = LocationUtils(this)
         permissionUtils = PermissionUtils(this)
+        if (!Places.isInitialized()) {
+            Places.initialize(applicationContext, "AIzaSyD0yhCJIwaogAL0Izhtf5_6VTP8Bi-djjY")
+        }
 
         permissionUtils.checkLocationPermission()
+
+        fetchNearbyPlaces()
 
         setContent {
             MappiTheme {
@@ -105,17 +116,25 @@ class MainActivity : ComponentActivity() {
                             MainScreen(
                                 navController,
                                 mapScreen = { MapScreenContent() },
-                                chatScreen = { ChatScreen() },
+                                decisionScreen = { DecisionsScreenContent() },
                                 profileScreen = { ProfileScreenContent(navController) },
                             )
                         },
                         mapScreen = { MapScreenContent() },
-                        chatScreen = { ChatScreen() },
+                        recommendationScreen = { DecisionsScreenContent() },
                         searchFriendsScreen = { SearchFriendsScreenContent() },
                         friendsListScreen = { FriendsListScreenContent(navController) },
                         profileScreen = { ProfileScreenContent(navController) },
                     )
                 }
+            }
+        }
+    }
+
+    private fun fetchNearbyPlaces() {
+        this.locationUtils.getCurrentLocation { location ->
+            lifecycleScope.launch {
+                decisionViewModel.prefetchNearbyRestaurants(location)
             }
         }
     }
@@ -132,7 +151,6 @@ class MainActivity : ComponentActivity() {
     private fun SignInScreenContent(navController: NavController) {
         val signInViewModel: SignInViewModel by viewModels()
         val signInState by signInViewModel.state.collectAsStateWithLifecycle()
-        val profileViewModel: ProfileViewModel by viewModels()
 
         LaunchedEffect(Unit) {
             googleAuthUiClient.getSignedInUser()?.let {
@@ -248,8 +266,14 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChatScreen() {
-        // Your ChatScreen content goes here
+    fun DecisionsScreenContent() {
+        val decisionsViewModel: DecisionsViewModel by viewModels()
+
+        // Only show DecisionsScreen once location is available
+        DecisionsScreen(
+            viewModel = decisionsViewModel,
+            userLocation = Location(""),
+        )
     }
 
     @Composable
