@@ -1,8 +1,8 @@
 package com.example.mappi
 
-import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import android.Manifest
 import android.content.pm.PackageManager
+import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -16,6 +16,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.AlertDialog
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Tab
@@ -36,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -47,10 +50,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.mappi.presentation.ui.NavHostSetup
+import com.example.mappi.presentation.ui.decisions.compose.AnimationScreen
+import com.example.mappi.presentation.ui.decisions.compose.DecisionsScreen
+import com.example.mappi.presentation.ui.decisions.viewmodel.DecisionsViewModel
 import com.example.mappi.presentation.ui.friends.composable.FriendRequestsScreen
 import com.example.mappi.presentation.ui.friends.composable.FriendsListScreen
 import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreen
 import com.example.mappi.presentation.ui.main.composables.MainScreen
+import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.presentation.ui.sign_in.GoogleAuthUiClient
@@ -64,6 +71,7 @@ import com.example.mappi.presentation.ui.theme.MappiTheme
 import com.example.mappi.util.LocationUtils
 import com.example.mappi.util.PermissionUtils
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.libraries.places.api.Places
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.io.File
@@ -81,14 +89,21 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var locationUtils: LocationUtils
     private lateinit var permissionUtils: PermissionUtils
+    private val decisionViewModel: DecisionsViewModel by viewModels()
+    private val profileViewModel: ProfileViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         locationUtils = LocationUtils(this)
         permissionUtils = PermissionUtils(this)
+        if (!Places.isInitialized()) {
+            Places.initialize(applicationContext, BuildConfig.API_KEY)
+        }
 
         permissionUtils.checkLocationPermission()
+
+        fetchNearbyPlaces()
 
         setContent {
             MappiTheme {
@@ -105,17 +120,34 @@ class MainActivity : ComponentActivity() {
                             MainScreen(
                                 navController,
                                 mapScreen = { MapScreenContent() },
-                                chatScreen = { ChatScreen() },
+                                decisionScreen = { DecisionsScreenContent(navController) },
                                 profileScreen = { ProfileScreenContent(navController) },
                             )
                         },
                         mapScreen = { MapScreenContent() },
-                        chatScreen = { ChatScreen() },
+                        recommendationScreen = { DecisionsScreenContent(navController) },
                         searchFriendsScreen = { SearchFriendsScreenContent() },
                         friendsListScreen = { FriendsListScreenContent(navController) },
                         profileScreen = { ProfileScreenContent(navController) },
+                        animationScreen = { userLocation, restaurantLocation ->
+                            AnimationScreen(
+                                userLocation = userLocation,
+                                restaurantLatLng = restaurantLocation,
+                                onBackToFindingPlaces = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
                     )
                 }
+            }
+        }
+    }
+
+    private fun fetchNearbyPlaces() {
+        this.locationUtils.getCurrentLocation { location ->
+            lifecycleScope.launch {
+                decisionViewModel.prefetchNearbyRestaurants(location)
             }
         }
     }
@@ -132,7 +164,6 @@ class MainActivity : ComponentActivity() {
     private fun SignInScreenContent(navController: NavController) {
         val signInViewModel: SignInViewModel by viewModels()
         val signInState by signInViewModel.state.collectAsStateWithLifecycle()
-        val profileViewModel: ProfileViewModel by viewModels()
 
         LaunchedEffect(Unit) {
             googleAuthUiClient.getSignedInUser()?.let {
@@ -248,9 +279,32 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChatScreen() {
-        // Your ChatScreen content goes here
+    fun DecisionsScreenContent(navController: NavController) {
+        val decisionsViewModel: DecisionsViewModel by viewModels()
+        val userLocation = remember { mutableStateOf<Location?>(null) }
+
+        LaunchedEffect(Unit) {
+            locationUtils.getCurrentLocation { location ->
+                userLocation.value = location
+            }
+        }
+
+        if (userLocation.value != null) {
+            DecisionsScreen(
+                navController,
+                decisionsViewModel,
+                userLocation = userLocation.value!!,
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color(0xFF3E8B67))
+            }
+        }
     }
+
 
     @Composable
     private fun ProfileScreenContent(navController: NavController) {

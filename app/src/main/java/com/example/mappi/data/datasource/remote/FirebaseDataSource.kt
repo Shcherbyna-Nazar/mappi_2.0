@@ -3,6 +3,7 @@ package com.example.mappi.data.datasource.remote
 import android.net.Uri
 import com.example.mappi.data.datasource.remote.dto.FriendRequestDto
 import com.example.mappi.data.datasource.remote.dto.PostDto
+import com.example.mappi.data.datasource.remote.dto.UserDecisionDto
 import com.example.mappi.data.datasource.remote.dto.UserDto
 import com.example.mappi.domain.model.Post
 import com.example.mappi.domain.model.RequestStatus
@@ -22,6 +23,7 @@ class FirebaseDataSource @Inject constructor(
 ) {
     private val usersRef = firebaseDatabase.getReference("users")
     private val friendRequestsRef = firebaseDatabase.getReference("friend_requests")
+    private val decisionsRef = firebaseDatabase.getReference("decisions")
 
     suspend fun uploadPhoto(
         uri: Uri,
@@ -274,5 +276,30 @@ class FirebaseDataSource @Inject constructor(
         usersRef.child(userId).child("friends").child(friendId).removeValue().await()
         usersRef.child(friendId).child("friends").child(userId).removeValue().await()
     }
+
+    suspend fun getUserDecisions(place_Ids: List<String>): Map<String, UserDecisionDto> {
+        val currentUser = firebaseAuth.currentUser ?: return emptyMap()
+        return place_Ids.mapNotNull { placeId ->
+            val statsSnapshot = decisionsRef.child(currentUser.uid).child(placeId).get().await()
+            statsSnapshot.getValue(UserDecisionDto::class.java)?.let { placeId to it }
+        }.toMap()
+    }
+
+    suspend fun makeDecision(placeId: String, decisionType: Boolean) {
+        val currentUser = firebaseAuth.currentUser ?: return
+        val decisionRef = decisionsRef.child(currentUser.uid).child(placeId)
+        val stats =
+            decisionRef.get().await().getValue(UserDecisionDto::class.java) ?: UserDecisionDto(
+                placeId
+            )
+
+        if (decisionType) {
+            stats.successCount++
+        } else {
+            stats.failureCount++
+        }
+        decisionRef.setValue(stats).await()
+    }
+
 
 }

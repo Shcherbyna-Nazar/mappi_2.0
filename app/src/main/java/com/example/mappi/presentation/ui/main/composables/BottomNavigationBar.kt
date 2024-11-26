@@ -14,7 +14,7 @@ import com.example.mappi.R
 
 @Composable
 fun BottomNavigationBar(navController: NavController) {
-    val items = listOf(Screen.Map, Screen.Chat, Screen.Profile)
+    val items = listOf(Screen.Map, Screen.Recommendations, Screen.Profile)
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -44,6 +44,6 @@ fun BottomNavigationBar(navController: NavController) {
 
 sealed class Screen(val route: String, @DrawableRes val icon: Int) {
     object Map : Screen("map", R.drawable.map)
-    object Chat : Screen("chat", R.drawable.chat)
+    object Recommendations : Screen("recommendations", R.drawable.baseline_search_24)
     object Profile : Screen("profile", R.drawable.ic_person_foreground)
 }

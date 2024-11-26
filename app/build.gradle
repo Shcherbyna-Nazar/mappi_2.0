@@ -6,7 +6,11 @@ plugins {
     id 'dagger.hilt.android.plugin'
 }
 
+def localProperties = new Properties()
+file("local.properties").withInputStream { localProperties.load(it) }
+def apiKey = localProperties.getProperty("API_KEY")
 android {
+
     namespace 'com.example.mappi'
     compileSdk 34
 
@@ -21,6 +25,8 @@ android {
         vectorDrawables {
             useSupportLibrary true
         }
+
+        buildConfigField "String", "API_KEY", "$apiKey"
     }
 
     buildTypes {
@@ -50,45 +56,62 @@ android {
 }
 
 dependencies {
+    ///implementation 'androidx.compose.foundation:foundation-android:1.7.5'
+    def compose_version = "1.4.3"
 
-    implementation 'androidx.core:core-ktx:1.7.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.3.1'
-    implementation 'androidx.activity:activity-compose:1.5.1'
-    implementation "androidx.compose.ui:ui:$compose_ui_version"
-    implementation "androidx.compose.ui:ui-tooling-preview:$compose_ui_version"
-    implementation 'androidx.compose.material:material:1.2.0'
-    implementation "androidx.compose.material:material-icons-extended:1.2.0"
+    // Core and lifecycle libraries
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.6.1'
+    implementation 'androidx.activity:activity-compose:1.7.2'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.google.android.gms:play-services-location:21.2.0'
 
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    androidTestImplementation "androidx.compose.ui:ui-test-junit4:$compose_ui_version"
-    debugImplementation "androidx.compose.ui:ui-tooling:$compose_ui_version"
-    debugImplementation "androidx.compose.ui:ui-test-manifest:$compose_ui_version"
+    // Compose UI
+    implementation "androidx.compose.ui:ui:$compose_version"
+    implementation "androidx.compose.ui:ui-tooling-preview:$compose_version"
+    implementation "androidx.compose.material:material:1.4.3"
+    implementation "androidx.compose.material:material-icons-extended:1.4.3"
+    implementation "androidx.compose.foundation:foundation:1.4.0" // For HorizontalPager support
+    debugImplementation "androidx.compose.ui:ui-tooling:$compose_version"
+    debugImplementation "androidx.compose.ui:ui-test-manifest:$compose_version"
 
-    // Import the BoM for the Firebase platform
-    implementation platform('com.google.firebase:firebase-bom:32.1.0')
-    // When using the BoM, you don't specify versions in Firebase library dependencies
+    // Firebase BoM and libraries
+    implementation platform('com.google.firebase:firebase-bom:32.2.2')
     implementation 'com.google.firebase:firebase-auth-ktx'
     implementation 'com.google.firebase:firebase-storage-ktx'
     implementation 'com.google.firebase:firebase-database-ktx'
     implementation 'com.google.firebase:firebase-appcheck-safetynet:16.0.0'
-    implementation 'com.google.android.gms:play-services-auth:20.4.1'
 
-    implementation "androidx.lifecycle:lifecycle-viewmodel-compose:2.6.0"
-    implementation "androidx.lifecycle:lifecycle-runtime-compose:2.6.0"
+    // Google Play Services and Location
+    implementation 'com.google.android.gms:play-services-auth:20.5.0'
+    implementation 'com.google.android.gms:play-services-maps:18.1.0'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    // Updated to a stable version
+
+    // Google Maps and Places
+    implementation 'com.google.maps.android:maps-compose:2.13.0'
+    implementation 'com.google.maps.android:android-maps-utils:2.3.0'
+    implementation 'com.google.android.libraries.places:places:2.7.0' // Updated to latest version
+
+    // Navigation and Image Loading
     implementation "androidx.navigation:navigation-compose:2.5.3"
-    implementation "io.coil-kt:coil-compose:2.2.2"
+    implementation "io.coil-kt:coil-compose:2.3.0"
 
+    // Dagger-Hilt
     implementation "com.google.dagger:hilt-android:2.44"
     kapt "com.google.dagger:hilt-android-compiler:2.44"
-    implementation 'androidx.hilt:hilt-navigation-compose:1.2.0'
+    implementation 'androidx.hilt:hilt-navigation-compose:1.0.0'
 
+    implementation("org.apache.commons:commons-math3:3.6.1")
 
-    implementation 'com.google.android.gms:play-services-maps:18.0.2'
-    implementation 'com.google.maps.android:maps-compose:2.11.4'
-    implementation 'com.google.maps.android:android-maps-utils:2.3.0'
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation "androidx.compose.ui:ui-test-junit4:$compose_version"
 
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
 }
+

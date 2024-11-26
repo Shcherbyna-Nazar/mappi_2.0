@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.mappi.presentation.ui.main.composables.BottomNavigationBar
 import com.example.mappi.presentation.ui.main.composables.Screen
+import com.google.android.gms.maps.model.LatLng
 
 @Composable
 fun NavHostSetup(
@@ -19,16 +20,20 @@ fun NavHostSetup(
     registerScreenContent: @Composable (NavHostController) -> Unit,
     mainScreen: @Composable (NavHostController) -> Unit,
     mapScreen: @Composable () -> Unit,
-    chatScreen: @Composable () -> Unit,
+    recommendationScreen: @Composable () -> Unit,
     profileScreen: @Composable (NavHostController) -> Unit,
     searchFriendsScreen: @Composable (NavHostController) -> Unit,
-    friendsListScreen: @Composable (NavHostController) -> Unit
+    friendsListScreen: @Composable (NavHostController) -> Unit,
+    animationScreen: @Composable (
+        userLocation: LatLng,
+        restaurantLatLng: LatLng,
+    ) -> Unit,
 ) {
     Scaffold(
         bottomBar = {
             if (currentRoute(navController) in listOf(
                     Screen.Map.route,
-                    Screen.Chat.route,
+                    Screen.Recommendations.route,
                     Screen.Profile.route
                 )
             ) {
@@ -46,9 +51,20 @@ fun NavHostSetup(
             composable("main") { mainScreen(navController) }
             composable("search_friends") { searchFriendsScreen(navController) }
             composable(Screen.Map.route) { mapScreen() }
-            composable(Screen.Chat.route) { chatScreen() }
+            composable(Screen.Recommendations.route) { recommendationScreen() }
             composable(Screen.Profile.route) { profileScreen(navController) }
             composable("friends_list") { friendsListScreen(navController) }
+            composable("animation/{userLocation}/{restaurantLatLng}") { backStackEntry ->
+                val userLocation = backStackEntry.arguments?.getString("userLocation")
+                val restaurantLatLng = backStackEntry.arguments?.getString("restaurantLatLng")
+                val latLng = userLocation?.split(",")?.let {
+                    LatLng(it[0].toDouble(), it[1].toDouble())
+                }
+                val restaurant = restaurantLatLng?.split(",")?.let {
+                    LatLng(it[0].toDouble(), it[1].toDouble())
+                }
+                animationScreen(latLng!!, restaurant!!)
+            }
         }
     }
 }

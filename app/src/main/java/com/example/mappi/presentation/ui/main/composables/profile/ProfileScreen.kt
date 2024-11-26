@@ -77,170 +77,186 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
-        val maxWidth = constraints.maxWidth.toFloat()
-        val aspectRatio = 185f / 32f
-        val height = (maxWidth / aspectRatio).dp
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
+        if (profileState.isLoading) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(height)
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.flowers),
-                    contentDescription = null,
+                CircularProgressIndicator(
+                    color = Color(0xFF0F3C3B),
+                    strokeWidth = 4.dp,
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(50.dp)
+                        .clip(CircleShape)
                 )
+            }
+        } else {
+            val maxWidth = constraints.maxWidth.toFloat()
+            val aspectRatio = 185f / 32f
+            val height = (maxWidth / aspectRatio).dp
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top,
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .height(height)
                 ) {
-                    IconButton(onClick = { showMenu = !showMenu }) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.menu),
-                            contentDescription = "Menu Icon",
-                            modifier = Modifier.size(40.dp),
-                            tint = Color.White
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                    Image(
+                        painter = painterResource(id = R.drawable.flowers),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
                     ) {
-                        DropdownMenuItem(onClick = {
-                            onSignOut()
-                            showMenu = false
-                        }) {
-                            Text("Sign Out")
+                        IconButton(onClick = { showMenu = !showMenu }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.menu),
+                                contentDescription = "Menu Icon",
+                                modifier = Modifier.size(40.dp),
+                                tint = Color.White
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(onClick = {
+                                onSignOut()
+                                showMenu = false
+                            }) {
+                                Text("Sign Out")
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(16.dp)
+                    ) {
+                        IconButton(onClick = { onSearchFriendsClick() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_search_friends),
+                                contentDescription = "Search Friends Icon",
+                                modifier = Modifier.size(40.dp),
+                                tint = Color.White
+                            )
                         }
                     }
                 }
+
                 Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
+                        .offset(y = (-75).dp)
                 ) {
-                    IconButton(onClick = { onSearchFriendsClick() }) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_search_friends),
-                            contentDescription = "Search Friends Icon",
-                            modifier = Modifier.size(40.dp),
-                            tint = Color.White
+                    RoundedCornerImageView(
+                        imageUrl = profileState.profilePictureUrl,
+                        contentDescription = "Profile picture",
+                        modifier = Modifier
+                            .size(150.dp)
+                            .padding(16.dp)
+                            .clickable { onProfilePictureClick() }
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .offset(y = (-60).dp)
+                ) {
+                    profileState.userData?.userName?.let { userName ->
+                        Text(
+                            text = userName,
+                            textAlign = TextAlign.Center,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF113030)
                         )
+                    }
+
+                    profileState.userData?.email?.let { email ->
+                        Text(
+                            text = email,
+                            textAlign = TextAlign.Center,
+                            fontSize = 16.sp,
+                            color = Color(0xFF408C68)
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .offset(y = (-40).dp),
+                    elevation = 4.dp,
+                    backgroundColor = Color.White,
+                    shape = RoundedCornerShape(15.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatItem(
+                            amount = "${friends.value.size}",
+                            label = "Friends",
+                            onClick = onFriendsClick
+                        )
+                        StatItem(amount = "5", label = "Markers")
+                        StatItem(amount = "${profileState.posts.size}", label = "Posts")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 16.dp)
+                        .offset(y = (-40).dp)
+                ) {
+                    items(profileState.posts) { post ->
+                        PostItem(post = post, onClick = { selectedPost = post })
                     }
                 }
             }
 
-            Box(
-                contentAlignment = Alignment.Center,
+            FloatingActionButton(
+                onClick = onAddPostClick,
+                backgroundColor = Color(0xFF3E8B67),
+                contentColor = Color.White,
                 modifier = Modifier
-                    .offset(y = (-75).dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
             ) {
-                RoundedCornerImageView(
-                    imageUrl = profileState.profilePictureUrl,
-                    contentDescription = "Profile picture",
-                    modifier = Modifier
-                        .size(150.dp)
-                        .padding(16.dp)
-                        .clickable { onProfilePictureClick() }
+                Icon(
+                    painter = painterResource(id = R.drawable.baseline_add_24),
+                    contentDescription = "Add Post"
                 )
             }
 
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .offset(y = (-60).dp)
-            ) {
-                profileState.userData?.userName?.let { userName ->
-                    Text(
-                        text = userName,
-                        textAlign = TextAlign.Center,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF113030)
-                    )
-                }
-
-                profileState.userData?.email?.let { email ->
-                    Text(
-                        text = email,
-                        textAlign = TextAlign.Center,
-                        fontSize = 16.sp,
-                        color = Color(0xFF408C68)
-                    )
-                }
+            selectedPost?.let { post ->
+                FullScreenDialog(
+                    imageUrl = post.url,
+                    onDismissRequest = { selectedPost = null },
+                    onDeleteClick = {
+                        onDeletePostClick(post)
+                        selectedPost = null
+                    }
+                )
             }
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .offset(y = (-40).dp),
-                elevation = 4.dp,
-                backgroundColor = Color.White,
-                shape = RoundedCornerShape(15.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatItem(
-                        amount = "${friends.value.size}",
-                        label = "Friends",
-                        onClick = onFriendsClick
-                    )
-                    StatItem(amount = "5", label = "Markers")
-                    StatItem(amount = "${profileState.posts.size}", label = "Posts")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp)
-                    .offset(y = (-40).dp)
-            ) {
-                items(profileState.posts) { post ->
-                    PostItem(post = post, onClick = { selectedPost = post })
-                }
-            }
-        }
-
-        FloatingActionButton(
-            onClick = onAddPostClick,
-            backgroundColor = Color(0xFF3E8B67),
-            contentColor = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_add_24),
-                contentDescription = "Add Post"
-            )
-        }
-
-        selectedPost?.let { post ->
-            FullScreenDialog(
-                imageUrl = post.url,
-                onDismissRequest = { selectedPost = null },
-                onDeleteClick = {
-                    onDeletePostClick(post)
-                    selectedPost = null
-                }
-            )
         }
     }
 }

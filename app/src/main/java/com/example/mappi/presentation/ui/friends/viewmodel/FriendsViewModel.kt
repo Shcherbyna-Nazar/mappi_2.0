@@ -4,7 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mappi.domain.model.FriendRequest
 import com.example.mappi.domain.model.UserData
-import com.example.mappi.domain.use_case.friends.*
+import com.example.mappi.domain.use_case.friends.AcceptRequestUseCase
+import com.example.mappi.domain.use_case.friends.DeleteFriendUseCase
+import com.example.mappi.domain.use_case.friends.GetFriendRequestsUseCase
+import com.example.mappi.domain.use_case.friends.GetFriendsUseCase
+import com.example.mappi.domain.use_case.friends.RejectRequestUseCase
+import com.example.mappi.domain.use_case.friends.SearchFriendsUseCase
+import com.example.mappi.domain.use_case.friends.SendRequestUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -13,7 +13,7 @@ import androidx.navigation.compose.rememberNavController
 fun MainScreen(
     navController: NavHostController,
     mapScreen: @Composable () -> Unit,
-    chatScreen: @Composable () -> Unit,
+    decisionScreen: @Composable () -> Unit,
     profileScreen: @Composable (NavHostController) -> Unit
 ) {
     Scaffold(
@@ -28,7 +28,7 @@ fun MainScreen(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Map.route) { mapScreen() }
-            composable(Screen.Chat.route) { chatScreen() }
+            composable(Screen.Recommendations.route) { decisionScreen() }
             composable(Screen.Profile.route) { profileScreen(navController) }
         }
     }
