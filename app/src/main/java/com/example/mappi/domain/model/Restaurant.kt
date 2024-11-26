@@ -1,5 +1,7 @@
 package com.example.mappi.domain.model
 
+import android.location.Location
+
 data class Restaurant(
     val id: String,
     val name: String,
@@ -9,5 +11,6 @@ data class Restaurant(
     var priceRange: String = "",//$$$
     var types: String = "",
     var photoUrl: String = "",
-    var cuisineType: String = ""
+    var cuisineType: String = "",
+    val location: Location,
 )

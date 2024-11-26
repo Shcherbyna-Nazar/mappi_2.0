@@ -9,10 +9,11 @@ import com.example.mappi.domain.use_case.decisions.GetNearbyRestaurantsUseCase
 import com.example.mappi.domain.use_case.decisions.GetRestaurantRecommendationUseCase
 import com.example.mappi.domain.use_case.decisions.MakeDecisionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.log
 
 @HiltViewModel
 class DecisionsViewModel @Inject constructor(
@@ -33,11 +34,15 @@ class DecisionsViewModel @Inject constructor(
     private val _nearbyRestaurants = MutableStateFlow<List<Restaurant>>(emptyList())
     val nearbyRestaurants: StateFlow<List<Restaurant>> = _nearbyRestaurants.asStateFlow()
 
+    private val _lastLocation = MutableStateFlow<Location?>(null)
+    val lastLocation: StateFlow<Location?> = _lastLocation.asStateFlow()
+
 
     fun prefetchNearbyRestaurants(userLocation: Location) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            _lastLocation.value = userLocation
             try {
                 Log.e("DecisionsViewModel", "prefetchNearbyRestaurants: start")
                 val nearbyRestaurants = getNearbyRestaurantsUseCase(userLocation)
@@ -47,7 +52,7 @@ class DecisionsViewModel @Inject constructor(
                 _error.value = e.localizedMessage ?: "An unexpected error occurred"
             } finally {
                 _isLoading.value = false
-                fetchRecommendation()
+                fetchRecommendation(userLocation, false)
             }
         }
     }
@@ -57,12 +62,21 @@ class DecisionsViewModel @Inject constructor(
      * Updates [_restaurantRecommendation] with the recommended restaurant.
      */
     @Synchronized
-    fun fetchRecommendation() {
+    fun fetchRecommendation(
+        userLocation: Location,
+        checkDistance: Boolean = true
+    ) {
         if (_isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
             try {
+                _lastLocation.value?.let {
+                    if (checkDistance && it.distanceTo(userLocation) > 1000) {
+                        Log.e("DecisionsViewModel", "update location")
+                        prefetchNearbyRestaurants(userLocation)
+                    }
+                }
                 val recommendedRestaurant = getRecommendationUseCase(nearbyRestaurants.value)
                 _restaurantRecommendation.value = recommendedRestaurant
             } catch (e: Exception) {
@@ -81,11 +95,17 @@ class DecisionsViewModel @Inject constructor(
      * Records the user's decision (like or dislike) on a restaurant and refreshes the recommendation.
      * If the decision is successful, fetches a new recommendation.
      */
-    fun makeDecision(placeId: String, decision: Boolean) {
+    fun makeDecision(
+        userLocation: Location,
+        placeId: String,
+        decision: Boolean
+    ) {
         viewModelScope.launch {
             try {
                 makeDecisionUseCase(placeId, decision)
-                fetchRecommendation() // Refresh recommendation after decision
+                if (!decision) {
+                    fetchRecommendation(userLocation)
+                } // Refresh recommendation after decision
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error processing decision"
             }

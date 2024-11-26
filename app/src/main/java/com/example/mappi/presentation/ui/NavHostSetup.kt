@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.mappi.presentation.ui.main.composables.BottomNavigationBar
 import com.example.mappi.presentation.ui.main.composables.Screen
+import com.google.android.gms.maps.model.LatLng
 
 @Composable
 fun NavHostSetup(
@@ -22,7 +23,11 @@ fun NavHostSetup(
     recommendationScreen: @Composable () -> Unit,
     profileScreen: @Composable (NavHostController) -> Unit,
     searchFriendsScreen: @Composable (NavHostController) -> Unit,
-    friendsListScreen: @Composable (NavHostController) -> Unit
+    friendsListScreen: @Composable (NavHostController) -> Unit,
+    animationScreen: @Composable (
+        userLocation: LatLng,
+        restaurantLatLng: LatLng,
+    ) -> Unit,
 ) {
     Scaffold(
         bottomBar = {
@@ -49,6 +54,17 @@ fun NavHostSetup(
             composable(Screen.Recommendations.route) { recommendationScreen() }
             composable(Screen.Profile.route) { profileScreen(navController) }
             composable("friends_list") { friendsListScreen(navController) }
+            composable("animation/{userLocation}/{restaurantLatLng}") { backStackEntry ->
+                val userLocation = backStackEntry.arguments?.getString("userLocation")
+                val restaurantLatLng = backStackEntry.arguments?.getString("restaurantLatLng")
+                val latLng = userLocation?.split(",")?.let {
+                    LatLng(it[0].toDouble(), it[1].toDouble())
+                }
+                val restaurant = restaurantLatLng?.split(",")?.let {
+                    LatLng(it[0].toDouble(), it[1].toDouble())
+                }
+                animationScreen(latLng!!, restaurant!!)
+            }
         }
     }
 }

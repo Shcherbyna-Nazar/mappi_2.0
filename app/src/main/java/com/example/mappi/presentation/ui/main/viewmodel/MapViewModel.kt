@@ -1,6 +1,5 @@
 package com.example.mappi.presentation.ui.main.viewmodel
 
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mappi.domain.model.Post

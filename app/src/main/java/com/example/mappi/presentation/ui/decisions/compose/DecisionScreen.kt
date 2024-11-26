@@ -1,12 +1,12 @@
 package com.example.mappi.presentation.ui.decisions.compose
 
 import android.location.Location
-import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +26,6 @@ import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import coil.compose.rememberImagePainter
 import com.example.mappi.R
 import com.example.mappi.domain.model.Restaurant
@@ -56,6 +56,7 @@ import kotlin.math.abs
 
 @Composable
 fun DecisionsScreen(
+    navController: NavController,
     viewModel: DecisionsViewModel = hiltViewModel(),
     userLocation: Location
 ) {
@@ -63,24 +64,46 @@ fun DecisionsScreen(
     val error by viewModel.error.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    var showDetailScreen by remember { mutableStateOf(false) }
+    var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFFE0F7FA), Color(0xFFA7FFEB))))
-            .padding(16.dp),
+            .background(Brush.verticalGradient(listOf(Color(0xFFE0F7FA), Color(0xFFA7FFEB)))),
         contentAlignment = Alignment.Center
     ) {
         when {
             isLoading -> {
-                CircularProgressIndicator(color = Color(0xFF3E8B67))
+                CircularProgressIndicator(color = Color(0xFF0F3C3B))
             }
 
             restaurant != null -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     SwipeableRestaurantCard(
                         restaurant = restaurant!!,
-                        onAccept = { viewModel.makeDecision(restaurant!!.id, true) },
-                        onReject = { viewModel.makeDecision(restaurant!!.id, false) }
+                        onAccept = {
+                            viewModel.makeDecision(
+                                userLocation,
+                                restaurant!!.id,
+                                true
+                            )
+                            navController.navigate(
+                                "animation/${userLocation.latitude},${userLocation.longitude}/" +
+                                        "${restaurant!!.location.latitude},${restaurant!!.location.longitude}"
+                            )
+                        },
+                        onReject = {
+                            viewModel.makeDecision(
+                                userLocation,
+                                restaurant!!.id,
+                                false
+                            )
+                        },
+                        onRestaurantClick = {
+                            selectedRestaurant = restaurant
+                            showDetailScreen = true
+                        }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     SwipeInstructions()
@@ -96,13 +119,36 @@ fun DecisionsScreen(
             }
         }
     }
+
+    // Animated Detail Screen
+    if (showDetailScreen && selectedRestaurant != null) {
+        RestaurantDetailScreen(
+            userLocation = userLocation,
+            restaurant = selectedRestaurant!!,
+            onAccept = {
+                showDetailScreen = false
+                viewModel.makeDecision(userLocation, selectedRestaurant!!.id, true)
+                navController.navigate(
+                    "animation/${userLocation.latitude},${userLocation.longitude}/" +
+                            "${restaurant!!.location.latitude},${restaurant!!.location.longitude}"
+                )
+            },
+            onReject = {
+                showDetailScreen = false
+                viewModel.makeDecision(userLocation, selectedRestaurant!!.id, false)
+            },
+            onDismiss = { showDetailScreen = false }
+        )
+    }
 }
+
 
 @Composable
 fun SwipeableRestaurantCard(
     restaurant: Restaurant,
     onAccept: () -> Unit,
-    onReject: () -> Unit
+    onReject: () -> Unit,
+    onRestaurantClick: () -> Unit
 ) {
     var offsetX by remember { mutableStateOf(0f) }
     val animatedOffsetX by animateDpAsState(targetValue = offsetX.dp, spring(stiffness = 300f))
@@ -123,17 +169,14 @@ fun SwipeableRestaurantCard(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        offsetX = if (abs(offsetX) < 150) {
-                            0f // Snap back if swipe is too small
-                        } else {
+                        if (abs(offsetX) > 150) {
                             if (offsetX > 0) onAccept() else onReject()
-                            0f // Reset after swipe action
                         }
+                        offsetX = 0f
                     }
-                ) { _, dragAmount ->
-                    offsetX += dragAmount * 1.5f // Increased swipe sensitivity
-                }
+                ) { _, dragAmount -> offsetX += dragAmount * 0.75f }
             }
+            .clickable { onRestaurantClick() }
             .shadow(12.dp, shape = RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
@@ -142,6 +185,7 @@ fun SwipeableRestaurantCard(
         RestaurantRecommendationContent(restaurant = restaurant)
     }
 }
+
 
 @Composable
 fun RestaurantRecommendationContent(restaurant: Restaurant) {
@@ -156,7 +200,7 @@ fun RestaurantRecommendationContent(restaurant: Restaurant) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(250.dp)
+                .height(300.dp)
                 .clip(RoundedCornerShape(12.dp))
         ) {
             Image(
@@ -248,30 +292,7 @@ fun SwipeInstructions() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        // Swipe Right Icon for Accept
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .size(60.dp) // Icon container size
-                .shadow(6.dp, shape = RoundedCornerShape(50)) // Soft shadow for depth
-                .background(Color(0xFFE0F2F1), shape = RoundedCornerShape(50)) // Soft background
-                .padding(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_swipe_right_24), // Use a swipe right icon resource
-                contentDescription = "Swipe Right to Accept",
-                tint = Color(0xFFD32F2F),
-                modifier = Modifier.size(36.dp) // Icon size
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Accept",
-                color = Color(0xFFD32F2F),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        // Swipe Left Icon for Reject
+        // Swipe Left Icon for Accept
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -281,14 +302,37 @@ fun SwipeInstructions() {
                 .padding(12.dp)
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.baseline_swipe_left_24), // Use a swipe left icon resource
-                contentDescription = "Swipe Left to Reject",
-                tint = Color(0xFF3E8B67),
+                painter = painterResource(id = R.drawable.baseline_swipe_left_24), // Use a swipe right icon resource
+                contentDescription = "Swipe Left to Accept",
+                tint = Color(0xFFD32F2F),
                 modifier = Modifier.size(36.dp) // Icon size
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Reject",
+                color = Color(0xFFD32F2F),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        // Swipe Right Icon for Reject
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .size(60.dp) // Icon container size
+                .shadow(6.dp, shape = RoundedCornerShape(50)) // Soft shadow for depth
+                .background(Color(0xFFE0F2F1), shape = RoundedCornerShape(50)) // Soft background
+                .padding(12.dp)
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.baseline_swipe_right_24), // Use a swipe left icon resource
+                contentDescription = "Swipe Right to Reject",
+                tint = Color(0xFF3E8B67),
+                modifier = Modifier.size(36.dp) // Icon size
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Accept",
                 color = Color(0xFF3E8B67),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
