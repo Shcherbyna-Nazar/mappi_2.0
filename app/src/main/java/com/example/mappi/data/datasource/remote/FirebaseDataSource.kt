@@ -1,6 +1,7 @@
 package com.example.mappi.data.datasource.remote
 
 import android.net.Uri
+import android.util.Log
 import com.example.mappi.data.datasource.remote.dto.FriendRequestDto
 import com.example.mappi.data.datasource.remote.dto.PostDto
 import com.example.mappi.data.datasource.remote.dto.UserDecisionDto
@@ -11,6 +12,7 @@ import com.example.mappi.util.Resource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageReference
 import com.google.firebase.storage.ktx.storageMetadata
 import kotlinx.coroutines.tasks.await
@@ -143,15 +145,22 @@ class FirebaseDataSource @Inject constructor(
     }
 
     suspend fun deletePost(post: Post) {
-        val currentUser = firebaseAuth.currentUser ?: return
         val fileName = Uri.parse(post.url).lastPathSegment ?: return
-        val photoRef = storageReference.child("posts/${currentUser.uid}/$fileName")
+        val photoRef = storageReference.child(fileName)
         try {
+            // Check if the file exists
+            photoRef.metadata.await()
+            // If exists, delete the file
             photoRef.delete().await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (e is StorageException && e.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND) {
+                Log.e("FirebaseDataSource", "File does not exist: ${e.localizedMessage}")
+            } else {
+                Log.e("FirebaseDataSource", "Error deleting file: ${e.localizedMessage}")
+            }
         }
     }
+
 
     suspend fun getFriends(): List<UserDto> {
         val userId = firebaseAuth.currentUser?.uid ?: return emptyList()
@@ -300,6 +309,4 @@ class FirebaseDataSource @Inject constructor(
         }
         decisionRef.setValue(stats).await()
     }
-
-
 }

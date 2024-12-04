@@ -59,6 +59,7 @@ import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreen
 import com.example.mappi.presentation.ui.main.composables.MainScreen
 import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
+import com.example.mappi.presentation.ui.main.viewmodel.MapViewModel
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.presentation.ui.sign_in.GoogleAuthUiClient
 import com.example.mappi.presentation.ui.sign_in.SignInState
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var permissionUtils: PermissionUtils
     private val decisionViewModel: DecisionsViewModel by viewModels()
     private val profileViewModel: ProfileViewModel by viewModels()
+    private val mapViewModel: MapViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,7 +149,10 @@ class MainActivity : ComponentActivity() {
     private fun fetchNearbyPlaces() {
         this.locationUtils.getCurrentLocation { location ->
             lifecycleScope.launch {
-                decisionViewModel.prefetchNearbyRestaurants(location)
+                decisionViewModel.fetchRecommendation(
+                    location,
+                    forceRefresh = true
+                )
             }
         }
     }
@@ -218,6 +223,7 @@ class MainActivity : ComponentActivity() {
                     popUpTo("sign_in") { inclusive = true }
                 }
                 profileViewModel.loadProfile()
+                mapViewModel.loadFriendPosts()
                 signInViewModel.resetState()
             }
 
@@ -275,12 +281,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun MapScreenContent() {
-        MapScreen(applicationContext)
+        MapScreen(applicationContext, mapViewModel, profileViewModel)
     }
 
     @Composable
     fun DecisionsScreenContent(navController: NavController) {
-        val decisionsViewModel: DecisionsViewModel by viewModels()
         val userLocation = remember { mutableStateOf<Location?>(null) }
 
         LaunchedEffect(Unit) {
@@ -292,7 +297,7 @@ class MainActivity : ComponentActivity() {
         if (userLocation.value != null) {
             DecisionsScreen(
                 navController,
-                decisionsViewModel,
+                decisionViewModel,
                 userLocation = userLocation.value!!,
             )
         } else {
@@ -308,7 +313,6 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun ProfileScreenContent(navController: NavController) {
-        val profileViewModel: ProfileViewModel by viewModels()
         var imageUri by remember { mutableStateOf<Uri?>(null) }
         var isProfileImage by remember { mutableStateOf(false) }
 

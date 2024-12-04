@@ -1,13 +1,10 @@
 package com.example.mappi.presentation.ui.decisions.compose
 
 import android.location.Location
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,15 +12,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,101 +29,135 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import coil.compose.rememberImagePainter
-import com.example.mappi.R
-import com.example.mappi.domain.model.Restaurant
+import com.example.mappi.domain.model.Place
 import com.example.mappi.presentation.ui.decisions.viewmodel.DecisionsViewModel
-import kotlin.math.abs
+import com.example.mappi.util.nearby.PlaceType
 
 @Composable
 fun DecisionsScreen(
     navController: NavController,
-    viewModel: DecisionsViewModel = hiltViewModel(),
+    viewModel: DecisionsViewModel,
     userLocation: Location
 ) {
-    val restaurant by viewModel.restaurantRecommendation.collectAsState()
+    val restaurant by viewModel.placeRecommendation.collectAsState()
     val error by viewModel.error.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    val placeTypes = PlaceType.values().toList()
+    var selectedPlaceTypes by remember { mutableStateOf(setOf(PlaceType.RESTAURANT)) } // Immutable set
     var showDetailScreen by remember { mutableStateOf(false) }
-    var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
+    var selectedPlace by remember { mutableStateOf<Place?>(null) }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFFE0F7FA), Color(0xFFA7FFEB)))),
-        contentAlignment = Alignment.Center
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator(color = Color(0xFF0F3C3B))
+        // Compact Chip Menu at the Top
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            placeTypes.forEach { type ->
+                Chip(
+                    type = type,
+                    isSelected = selectedPlaceTypes.contains(type),
+                    onClick = {
+                        selectedPlaceTypes = if (selectedPlaceTypes.contains(type)) {
+                            selectedPlaceTypes - type
+                        } else {
+                            selectedPlaceTypes + type
+                        }
+                        viewModel.fetchRecommendation(
+                            userLocation,
+                            placeTypes = selectedPlaceTypes.toList(),
+                            forceRefresh = true
+                        )
+                    }
+                )
             }
+        }
 
-            restaurant != null -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Main Content Area
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(color = Color(0xFF0F3C3B))
+                }
+
+                restaurant != null -> {
                     SwipeableRestaurantCard(
-                        restaurant = restaurant!!,
+                        place = restaurant!!,
                         onAccept = {
-                            viewModel.makeDecision(
-                                userLocation,
-                                restaurant!!.id,
-                                true
-                            )
+                            viewModel.makeDecision(userLocation, restaurant!!.id, true)
                             navController.navigate(
                                 "animation/${userLocation.latitude},${userLocation.longitude}/" +
                                         "${restaurant!!.location.latitude},${restaurant!!.location.longitude}"
                             )
                         },
                         onReject = {
-                            viewModel.makeDecision(
-                                userLocation,
-                                restaurant!!.id,
-                                false
-                            )
+                            viewModel.makeDecision(userLocation, restaurant!!.id, false)
                         },
                         onRestaurantClick = {
-                            selectedRestaurant = restaurant
+                            selectedPlace = restaurant
                             showDetailScreen = true
                         }
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SwipeInstructions()
+                }
+
+                error != null -> {
+                    Text(
+                        text = "Error: $error",
+                        color = MaterialTheme.colors.error,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = "No recommendations available for selected types",
+                        color = MaterialTheme.colors.onSurface,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 }
             }
+        }
 
-            error != null -> {
-                Text(text = "Error: $error", color = MaterialTheme.colors.error)
-            }
-
-            else -> {
-                Text(text = "No recommendations available")
+        // Swipe Instructions at the Bottom
+        if (!isLoading && restaurant != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                SwipeInstructions()
             }
         }
     }
 
     // Animated Detail Screen
-    if (showDetailScreen && selectedRestaurant != null) {
+    if (showDetailScreen && selectedPlace != null) {
         RestaurantDetailScreen(
             userLocation = userLocation,
-            restaurant = selectedRestaurant!!,
+            place = selectedPlace!!,
             onAccept = {
                 showDetailScreen = false
-                viewModel.makeDecision(userLocation, selectedRestaurant!!.id, true)
+                viewModel.makeDecision(userLocation, selectedPlace!!.id, true)
                 navController.navigate(
                     "animation/${userLocation.latitude},${userLocation.longitude}/" +
                             "${restaurant!!.location.latitude},${restaurant!!.location.longitude}"
@@ -135,210 +165,50 @@ fun DecisionsScreen(
             },
             onReject = {
                 showDetailScreen = false
-                viewModel.makeDecision(userLocation, selectedRestaurant!!.id, false)
+                viewModel.makeDecision(userLocation, selectedPlace!!.id, false)
             },
             onDismiss = { showDetailScreen = false }
         )
     }
 }
 
-
 @Composable
-fun SwipeableRestaurantCard(
-    restaurant: Restaurant,
-    onAccept: () -> Unit,
-    onReject: () -> Unit,
-    onRestaurantClick: () -> Unit
+fun Chip(
+    type: PlaceType,
+    isSelected: Boolean,
+    onClick: () -> Unit
 ) {
-    var offsetX by remember { mutableStateOf(0f) }
-    val animatedOffsetX by animateDpAsState(targetValue = offsetX.dp, spring(stiffness = 300f))
-    val rotation by animateFloatAsState(targetValue = offsetX / 30f, spring(stiffness = 300f))
-    val opacity by animateFloatAsState(targetValue = if (abs(offsetX) > 100) 0.85f else 1f)
-
-    Box(
-        contentAlignment = Alignment.Center,
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (isSelected) Color(0xFF0F3C3B) else Color(0xFFE0F7FA),
+        contentColor = if (isSelected) Color.White else Color(0xFF0F3C3B),
+        border = if (isSelected) BorderStroke(2.dp, Color(0xFFFFA726)) else null,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .offset(x = animatedOffsetX)
-            .rotate(rotation)
-            .graphicsLayer {
-                scaleX = if (offsetX < 0) 1.05f else 0.95f
-                scaleY = if (offsetX < 0) 1.05f else 0.95f
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        if (abs(offsetX) > 150) {
-                            if (offsetX > 0) onAccept() else onReject()
-                        }
-                        offsetX = 0f
-                    }
-                ) { _, dragAmount -> offsetX += dragAmount * 0.75f }
-            }
-            .clickable { onRestaurantClick() }
-            .shadow(12.dp, shape = RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .alpha(opacity)
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp)
     ) {
-        RestaurantRecommendationContent(restaurant = restaurant)
-    }
-}
-
-
-@Composable
-fun RestaurantRecommendationContent(restaurant: Restaurant) {
-    Column(
-        horizontalAlignment = Alignment.Start,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-        // Larger Restaurant Image with Gradient Overlay
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .clip(RoundedCornerShape(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Image(
-                painter = rememberImagePainter(data = restaurant.photoUrl),
-                contentDescription = "Restaurant Image",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color(0xB3000000)),
-                            startY = 150f
-                        )
-                    )
-            )
-            Text(
-                text = restaurant.name,
-                style = MaterialTheme.typography.h6.copy(color = Color.White),
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Restaurant Details with Icons
-        Text(
-            text = "Cuisine: ${restaurant.cuisineType}",
-            color = Color(0xFF3E8B67),
-            fontSize = 16.sp,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_location),
-                contentDescription = null,
-                tint = Color(0xFF6E6E6E)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = restaurant.address, color = Color(0xFF6E6E6E), fontSize = 14.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_attach_money_24),
-                contentDescription = null,
-                tint = Color(0xFF6E6E6E)
+                painter = painterResource(id = type.iconResId),
+                contentDescription = type.name,
+                modifier = Modifier.size(20.dp),
+                tint = if (isSelected) Color.White else Color(0xFF0F3C3B)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Price: ${restaurant.priceRange}",
-                color = Color(0xFF6E6E6E),
-                fontSize = 14.sp
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_rate),
-                contentDescription = null,
-                tint = Color(0xFF6E6E6E)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Rating: ${restaurant.rating}", color = Color(0xFF6E6E6E), fontSize = 14.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_dist),
-                contentDescription = null,
-                tint = Color(0xFF6E6E6E)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "${restaurant.distance} km away",
-                color = Color(0xFF6E6E6E),
-                fontSize = 14.sp
+                text = type.name,
+                style = MaterialTheme.typography.body2.copy(
+                    color = if (isSelected) Color.White else Color(0xFF0F3C3B),
+                    fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+                )
             )
         }
     }
 }
 
-@Composable
-fun SwipeInstructions() {
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
-        // Swipe Left Icon for Accept
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .size(60.dp) // Icon container size
-                .shadow(6.dp, shape = RoundedCornerShape(50)) // Soft shadow for depth
-                .background(Color(0xFFFFEBEE), shape = RoundedCornerShape(50)) // Soft background
-                .padding(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_swipe_left_24), // Use a swipe right icon resource
-                contentDescription = "Swipe Left to Accept",
-                tint = Color(0xFFD32F2F),
-                modifier = Modifier.size(36.dp) // Icon size
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Reject",
-                color = Color(0xFFD32F2F),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        // Swipe Right Icon for Reject
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .size(60.dp) // Icon container size
-                .shadow(6.dp, shape = RoundedCornerShape(50)) // Soft shadow for depth
-                .background(Color(0xFFE0F2F1), shape = RoundedCornerShape(50)) // Soft background
-                .padding(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_swipe_right_24), // Use a swipe left icon resource
-                contentDescription = "Swipe Right to Reject",
-                tint = Color(0xFF3E8B67),
-                modifier = Modifier.size(36.dp) // Icon size
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Accept",
-                color = Color(0xFF3E8B67),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
 
 

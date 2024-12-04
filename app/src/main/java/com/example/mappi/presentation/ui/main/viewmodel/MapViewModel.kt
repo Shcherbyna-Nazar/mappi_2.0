@@ -17,17 +17,24 @@ class MapViewModel @Inject constructor(
     private val _friendPosts = MutableStateFlow<List<Post>>(emptyList())
     val friendPosts: StateFlow<List<Post>> get() = _friendPosts
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> get() = _isLoading
+
     init {
         loadFriendPosts()
     }
 
 
-    private fun loadFriendPosts() {
+    fun loadFriendPosts() {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
                 _friendPosts.value = getFriendPosts()
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+            finally {
+                _isLoading.value = false
             }
         }
     }

@@ -4,12 +4,22 @@ import android.annotation.SuppressLint
 import android.content.IntentSender
 import android.location.Location
 import android.widget.Toast
+import androidx.compose.ui.graphics.toArgb
+import com.example.mappi.BuildConfig
 import com.example.mappi.MainActivity
+import com.example.mappi.presentation.ui.decisions.compose.TravelMode
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.PolylineOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 class LocationUtils(private val activity: MainActivity) {
 
