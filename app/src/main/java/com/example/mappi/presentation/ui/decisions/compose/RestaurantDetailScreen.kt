@@ -25,12 +25,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.mappi.domain.model.Restaurant
+import com.example.mappi.domain.model.Place
 
 @Composable
 fun RestaurantDetailScreen(
     userLocation: Location,
-    restaurant: Restaurant,
+    place: Place,
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onDismiss: () -> Unit
@@ -69,7 +69,7 @@ fun RestaurantDetailScreen(
             ) {
                 // Restaurant Name
                 Text(
-                    text = restaurant.name,
+                    text = place.name,
                     style = MaterialTheme.typography.h4,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF3E8B67)
@@ -86,9 +86,9 @@ fun RestaurantDetailScreen(
                 ) {
                     RestaurantMap(
                         userLocation = userLocation,
-                        restaurantLocation = restaurant.location,
-                        restaurantTitle = restaurant.name,
-                        restaurantPhotoUrl = restaurant.photoUrl
+                        restaurantLocation = place.location,
+                        restaurantTitle = place.name,
+                        restaurantPhotoUrl = place.photoUrl
                     )
                 }
 
@@ -97,22 +97,22 @@ fun RestaurantDetailScreen(
                 // Restaurant Info Section
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Cuisine: ${restaurant.cuisineType}",
+                        text = "Place Type: ${place.placeType.displayName}",
                         style = MaterialTheme.typography.body1
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Rating: ${restaurant.rating} ⭐",
+                        text = "Rating: ${place.rating} ⭐",
                         style = MaterialTheme.typography.body1
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Address: ${restaurant.address}",
+                        text = "Address: ${place.address}",
                         style = MaterialTheme.typography.body1
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Distance: ${restaurant.distance} km",
+                        text = "Distance: ${place.distance} km",
                         style = MaterialTheme.typography.body1
                     )
                 }

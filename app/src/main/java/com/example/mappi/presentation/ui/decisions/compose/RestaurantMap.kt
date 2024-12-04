@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.mappi.util.RouteUtils
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.compose.*
@@ -35,8 +36,21 @@ fun RestaurantMap(
     restaurantPhotoUrl: String
 ) {
     val cameraPositionState = rememberCameraPositionState()
+    val polylinePoints = remember { mutableStateOf<List<LatLng>?>(null) }
 
-    // Ustawienie kamery tak, aby obejmowała obie lokalizacje
+    // Fetch route and set polyline points
+    LaunchedEffect(userLocation, restaurantLocation) {
+        val userLatLng = LatLng(userLocation.latitude, userLocation.longitude)
+        val restaurantLatLng = LatLng(restaurantLocation.latitude, restaurantLocation.longitude)
+        val fetchedRoute = RouteUtils.fetchRoute(
+            origin = userLatLng,
+            destination = restaurantLatLng,
+            mode = TravelMode.WALKING // Example travel mode
+        )
+        polylinePoints.value = fetchedRoute?.points
+    }
+
+    // Adjust camera position to include both locations
     LaunchedEffect(userLocation, restaurantLocation) {
         val boundsBuilder = LatLngBounds.Builder()
         boundsBuilder.include(LatLng(userLocation.latitude, userLocation.longitude))
@@ -48,7 +62,7 @@ fun RestaurantMap(
 
     val restaurantMarkerBitmap = remember { mutableStateOf<BitmapDescriptor?>(null) }
 
-    // Załaduj zdjęcie restauracji jako bitmapę
+    // Load restaurant photo as marker
     LaunchedEffect(restaurantPhotoUrl) {
         val zoomLevel = cameraPositionState.position.zoom
         val markerSize = calculateMarkerSize(zoomLevel)
@@ -62,14 +76,14 @@ fun RestaurantMap(
             .clip(RoundedCornerShape(16.dp)),
         cameraPositionState = cameraPositionState
     ) {
-        // Marker dla lokalizacji użytkownika
+        // Marker for user location
         Marker(
             state = MarkerState(position = LatLng(userLocation.latitude, userLocation.longitude)),
             title = "You are here",
             icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
         )
 
-        // Połyskujący krąg wokół lokalizacji użytkownika
+        // Circle for user location
         Circle(
             center = LatLng(userLocation.latitude, userLocation.longitude),
             radius = 50.0,
@@ -78,7 +92,7 @@ fun RestaurantMap(
             strokeWidth = 2f
         )
 
-        // Marker dla restauracji
+        // Marker for restaurant location
         if (restaurantMarkerBitmap.value != null) {
             Marker(
                 state = MarkerState(
@@ -89,36 +103,16 @@ fun RestaurantMap(
             )
         }
 
-        // Zakrzywiony łuk łączący lokalizacje
-        DrawCurvedLine(
-            startLatLng = LatLng(userLocation.latitude, userLocation.longitude),
-            endLatLng = LatLng(restaurantLocation.latitude, restaurantLocation.longitude),
-            color = Color.Black, // Czarny łuk
-            width = 5f
-        )
+        // Draw polyline if points are available
+        polylinePoints.value?.let { points ->
+            Polyline(
+                points = points,
+                color = Color.Blue, // Polyline color
+                width = 8f // Polyline width
+            )
+        }
     }
 }
-
-@Composable
-fun DrawCurvedLine(
-    startLatLng: LatLng,
-    endLatLng: LatLng,
-    color: androidx.compose.ui.graphics.Color,
-    width: Float
-) {
-    val controlLatLng = LatLng(
-        (startLatLng.latitude + endLatLng.latitude) / 2,
-        (startLatLng.longitude + endLatLng.longitude) / 2 + 0.005 // Przesunięcie dla efektu łuku
-    )
-
-    Polyline(
-        points = listOf(startLatLng, controlLatLng, endLatLng),
-        color = color,
-        width = width
-    )
-}
-
-
 
 suspend fun createRoundedMarkerBitmap(photoUrl: String, size: Int): BitmapDescriptor? {
     return withContext(Dispatchers.IO) {

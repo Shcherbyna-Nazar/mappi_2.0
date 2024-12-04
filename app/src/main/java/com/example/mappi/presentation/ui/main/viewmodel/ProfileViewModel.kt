@@ -26,7 +26,7 @@ class ProfileViewModel @Inject constructor(
     private val deletePostUseCase: DeletePostUseCase
 ) : ViewModel() {
 
-    private val _profileState = MutableStateFlow(ProfileState(null, emptyList(), null))
+    private val _profileState = MutableStateFlow(ProfileState(null, emptyList(), null, isLoading = false))
     val profileState: StateFlow<ProfileState> get() = _profileState
 
     init {
@@ -49,6 +49,8 @@ class ProfileViewModel @Inject constructor(
                 Log.e("ProfileViewModel", "loadProfile done")
             } catch (e: Exception) {
                 _profileState.value = _profileState.value.copy(error = e.message)
+            } finally {
+                _profileState.value = _profileState.value.copy(isLoading = false)
             }
         }
     }
@@ -61,6 +63,7 @@ class ProfileViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
+                _profileState.value = _profileState.value.copy(isLoading = true)
                 val url = uploadPhotoUseCase(uri, latitude, longitude, isProfilePicture)
                 val userData = getSignedInUser()
                 if (isProfilePicture) {
@@ -80,6 +83,8 @@ class ProfileViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _profileState.value = _profileState.value.copy(error = e.message)
+            } finally {
+                _profileState.value = _profileState.value.copy(isLoading = false)
             }
         }
     }
@@ -87,12 +92,15 @@ class ProfileViewModel @Inject constructor(
     fun deletePost(post: Post) {
         viewModelScope.launch {
             try {
+                _profileState.value = _profileState.value.copy(isLoading = true)
                 deletePostUseCase(post)
                 _profileState.value = _profileState.value.copy(
                     posts = _profileState.value.posts.filter { it != post }
                 )
             } catch (e: Exception) {
                 _profileState.value = _profileState.value.copy(error = e.message)
+            } finally {
+                _profileState.value = _profileState.value.copy(isLoading = false)
             }
         }
     }
@@ -100,7 +108,7 @@ class ProfileViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             signOutUseCase()
-            _profileState.value = ProfileState(null, emptyList(), null)
+            _profileState.value = ProfileState(null, emptyList(), null, isLoading = false)
         }
     }
 }
