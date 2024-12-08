@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mappi.domain.model.Comment
 import com.example.mappi.domain.model.Post
+import com.example.mappi.domain.model.UserData
 import com.example.mappi.domain.use_case.auth.GetSignedInUserUseCase
 import com.example.mappi.domain.use_case.auth.SignOutUseCase
 import com.example.mappi.domain.use_case.profile.AddCommentUseCase
@@ -13,6 +14,7 @@ import com.example.mappi.domain.use_case.profile.DeletePostUseCase
 import com.example.mappi.domain.use_case.profile.GetPostsUseCase
 import com.example.mappi.domain.use_case.profile.UploadPhotoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -40,8 +42,10 @@ class ProfileViewModel @Inject constructor(
         updateLoadingState(true)
         viewModelScope.launch {
             try {
-                val userData = getSignedInUser() ?: throw Exception("User not signed in")
-                val posts = getPostsUseCase()
+                val userDeferred = async { getSignedInUser() }
+                val postsDeferred = async { getPostsUseCase() }
+                val userData = userDeferred.await() ?: throw Exception("User not signed in")
+                val posts = postsDeferred.await()
                 _profileState.value = _profileState.value.copy(
                     userData = userData,
                     posts = posts,
@@ -69,14 +73,10 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userData = getSignedInUser() ?: throw Exception("User not signed in")
-                val commentData = Comment(
-                    comment,
-                    userData.userName ?: "Unknown",
-                    userData.userId,
-                    System.currentTimeMillis(),
-                    userData.profilePictureUrl ?: ""
-                )
-                val postId = System.currentTimeMillis().toString()
+                Log.e("nazar", "user fetched")
+                val commentData = createComment(userData, comment)
+                val postId = generatePostId()
+
                 val url = uploadPhotoUseCase(
                     id = postId,
                     uri = uri,
@@ -87,26 +87,53 @@ class ProfileViewModel @Inject constructor(
                     comment = commentData,
                     isProfilePicture = isProfilePicture
                 )
+                Log.e("nazar", "photo uploaded")
 
-                if (isProfilePicture) {
-                    updateProfilePicture(url)
-                } else {
-                    addNewPost(
-                        postId,
-                        url,
-                        latitude,
-                        longitude,
-                        rating,
-                        commentData,
-                        userData.userName ?: "Unknown"
-                    )
-                }
+                handlePhotoUploadResult(
+                    url,
+                    isProfilePicture,
+                    postId,
+                    latitude,
+                    longitude,
+                    rating,
+                    commentData,
+                    userData.userName ?: "Unknown"
+                )
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error uploading photo", e)
                 updateErrorState(e.message)
             } finally {
                 updateLoadingState(false)
             }
+        }
+    }
+
+    private fun createComment(userData: UserData, comment: String): Comment {
+        return Comment(
+            text = comment,
+            userName = userData.userName ?: "Unknown",
+            ownerId = userData.userId,
+            timeStamp = System.currentTimeMillis(),
+            profilePictureUrl = userData.profilePictureUrl ?: ""
+        )
+    }
+
+    private fun generatePostId() = System.currentTimeMillis().toString()
+
+    private fun handlePhotoUploadResult(
+        url: String,
+        isProfilePicture: Boolean,
+        postId: String,
+        latitude: Double?,
+        longitude: Double?,
+        rating: Int,
+        commentData: Comment,
+        userName: String
+    ) {
+        if (isProfilePicture) {
+            updateProfilePicture(url)
+        } else {
+            addNewPost(postId, url, latitude, longitude, rating, commentData, userName)
         }
     }
 
