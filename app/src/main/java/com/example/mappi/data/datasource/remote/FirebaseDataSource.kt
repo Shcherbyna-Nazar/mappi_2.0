@@ -1,5 +1,6 @@
 package com.example.mappi.data.datasource.remote
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.mappi.data.datasource.remote.dto.CommentDto
@@ -9,19 +10,24 @@ import com.example.mappi.data.datasource.remote.dto.UserDecisionDto
 import com.example.mappi.data.datasource.remote.dto.UserDto
 import com.example.mappi.domain.model.Post
 import com.example.mappi.domain.model.RequestStatus
+import com.example.mappi.util.ImageUtils
 import com.example.mappi.util.Resource
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageReference
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 class FirebaseDataSource @Inject constructor(
     private val storageReference: StorageReference,
     private val firebaseAuth: FirebaseAuth,
-    firebaseDatabase: FirebaseDatabase
+    firebaseDatabase: FirebaseDatabase,
+    private val context: Context
 ) {
     private val usersRef = firebaseDatabase.getReference("users")
     private val friendRequestsRef = firebaseDatabase.getReference("friend_requests")
@@ -37,49 +43,99 @@ class FirebaseDataSource @Inject constructor(
         rating: Int,
         comment: CommentDto,
         isProfilePicture: Boolean
-    ): String {
-        val currentUser = firebaseAuth.currentUser ?: return ""
+    ): String = coroutineScope {
+        val currentUser =
+            firebaseAuth.currentUser ?: throw IllegalStateException("User not signed in")
+
+        // Determine storage reference based on photo type
         val photoRef = if (isProfilePicture) {
             storageReference.child("profilePictures/${currentUser.uid}.jpg")
         } else {
             storageReference.child("posts/${currentUser.uid}/$postId.jpg")
         }
 
-        return try {
-            // Upload photo to Firebase Storage
-            photoRef.putFile(uri).await()
+        try {
+            // Compress the image
+            val compressedFile = ImageUtils.compressImage(uri, context)
 
-            // Retrieve download URL
+            // Upload the compressed photo
+            photoRef.putFile(Uri.fromFile(compressedFile)).await()
+
+            // Retrieve the download URL
             val url = photoRef.downloadUrl.await().toString()
 
-            // Update profile picture or post metadata in Realtime Database
+            // Update the database with the photo URL and metadata
             if (isProfilePicture) {
-                val profileUpdate = UserProfileChangeRequest.Builder()
-                    .setPhotoUri(Uri.parse(url))
-                    .build()
-                currentUser.updateProfile(profileUpdate).await()
-                usersRef.child(currentUser.uid).child("profilePictureUrl").setValue(url).await()
+                updateProfilePicture(currentUser, url)
             } else {
-                // Construct post metadata
-                val post = mapOf(
-                    "id" to postId,
-                    "url" to url,
-                    "latitude" to latitude,
-                    "longitude" to longitude,
-                    "userName" to userName,
-                    "rating" to rating,
-                    "comments" to listOf(comment)
+                updatePostMetadata(
+                    userId = currentUser.uid,
+                    postId = postId,
+                    url = url,
+                    latitude = latitude,
+                    longitude = longitude,
+                    userName = userName,
+                    rating = rating,
+                    comment = comment
                 )
-                postsRef.child(currentUser.uid).child(postId).setValue(post).await()
             }
 
+            // Return the URL
             url
         } catch (e: Exception) {
-            e.printStackTrace()
-            ""
+            Log.e("UploadPhoto", "Error uploading photo", e)
+            throw e // Re-throw to propagate the error if needed
         }
     }
 
+
+    private suspend fun updateProfilePicture(user: FirebaseUser, url: String) {
+        try {
+            // Update user profile
+            val profileUpdate =
+                UserProfileChangeRequest.Builder().setPhotoUri(Uri.parse(url)).build()
+
+            user.updateProfile(profileUpdate).await()
+
+            // Batch database update for user profile
+            val updates = mapOf(
+                "profilePictureUrl" to url
+            )
+            usersRef.child(user.uid).updateChildren(updates).await()
+        } catch (e: Exception) {
+            Log.e("ProfileUpdate", "Error updating profile picture", e)
+            throw e
+        }
+    }
+
+    private suspend fun updatePostMetadata(
+        userId: String,
+        postId: String,
+        url: String,
+        latitude: Double?,
+        longitude: Double?,
+        userName: String,
+        rating: Int,
+        comment: CommentDto
+    ) {
+        try {
+            // Batch metadata and comments update
+            val post = mapOf(
+                "id" to postId,
+                "url" to url,
+                "latitude" to latitude,
+                "longitude" to longitude,
+                "userName" to userName,
+                "rating" to rating,
+                "comments" to listOf(comment)
+            )
+
+            postsRef.child(userId).child(postId).updateChildren(post).await()
+        } catch (e: Exception) {
+            Log.e("PostMetadataUpdate", "Error updating post metadata", e)
+            throw e
+        }
+    }
 
     suspend fun getPosts(): List<PostDto> {
         val currentUser = firebaseAuth.currentUser ?: return emptyList()
@@ -88,52 +144,61 @@ class FirebaseDataSource @Inject constructor(
             if (!postsSnapshot.exists()) return emptyList()
 
             postsSnapshot.children.mapNotNull { snapshot ->
-                try {
-                    val id = snapshot.key.orEmpty()
-                    val url = snapshot.child("url").value.toString()
-                    val latitude =
-                        snapshot.child("latitude").value?.toString()?.toDoubleOrNull() ?: 0.0
-                    val longitude =
-                        snapshot.child("longitude").value?.toString()?.toDoubleOrNull() ?: 0.0
-                    val userName = snapshot.child("userName").value.toString()
-                    val rating = snapshot.child("rating").value?.toString()?.toIntOrNull() ?: 0
-                    val comments =
-                        snapshot.child("comments").children.mapNotNull { commentSnapshot ->
-                            val text = commentSnapshot.child("text").value.toString()
-                            val commentUserName = commentSnapshot.child("userName").value.toString()
-                            val timestamp =
-                                commentSnapshot.child("timestamp").value?.toString()?.toLongOrNull()
-                                    ?: 0L
-                            val profilePictureUrl =
-                                commentSnapshot.child("profilePictureUrl").value.toString()
-
-                            val ownerId = commentSnapshot.child("ownerId").value.toString()
-                            CommentDto(
-                                text,
-                                commentUserName,
-                                ownerId,
-                                timestamp,
-                                profilePictureUrl
-                            )
-                        }
-
-                    PostDto(
-                        id = id,
-                        url = url,
-                        latitude = latitude,
-                        longitude = longitude,
-                        userName = userName,
-                        rating = rating,
-                        comments = comments
-                    )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    null
-                }
+                parsePost(snapshot)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("getPosts", "Error fetching posts for user: ${currentUser.uid}", e)
             emptyList()
+        }
+    }
+
+    private fun parsePost(snapshot: DataSnapshot): PostDto? {
+        return try {
+            val id = snapshot.key.orEmpty()
+            val url = snapshot.child("url").value?.toString().orEmpty()
+            val latitude = snapshot.child("latitude").value?.toString()?.toDoubleOrNull() ?: 0.0
+            val longitude = snapshot.child("longitude").value?.toString()?.toDoubleOrNull() ?: 0.0
+            val userName = snapshot.child("userName").value?.toString().orEmpty()
+            val rating = snapshot.child("rating").value?.toString()?.toIntOrNull() ?: 0
+            val comments = parseComments(snapshot.child("comments"))
+
+            PostDto(
+                id = id,
+                url = url,
+                latitude = latitude,
+                longitude = longitude,
+                userName = userName,
+                rating = rating,
+                comments = comments
+            )
+        } catch (e: Exception) {
+            Log.e("parsePost", "Error parsing post snapshot: ${snapshot.key}", e)
+            null
+        }
+    }
+
+    private fun parseComments(commentsSnapshot: DataSnapshot): List<CommentDto> {
+        return commentsSnapshot.children.mapNotNull { commentSnapshot ->
+            try {
+                val text = commentSnapshot.child("text").value?.toString().orEmpty()
+                val commentUserName = commentSnapshot.child("userName").value?.toString().orEmpty()
+                val timestamp =
+                    commentSnapshot.child("timestamp").value?.toString()?.toLongOrNull() ?: 0L
+                val profilePictureUrl =
+                    commentSnapshot.child("profilePictureUrl").value?.toString().orEmpty()
+                val ownerId = commentSnapshot.child("ownerId").value?.toString().orEmpty()
+
+                CommentDto(
+                    text = text,
+                    userName = commentUserName,
+                    ownerId = ownerId,
+                    timestamp = timestamp,
+                    profilePictureUrl = profilePictureUrl
+                )
+            } catch (e: Exception) {
+                Log.e("parseComments", "Error parsing comment snapshot", e)
+                null
+            }
         }
     }
 
@@ -160,9 +225,7 @@ class FirebaseDataSource @Inject constructor(
         return try {
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             authResult.user?.let { user ->
-                val profileUpdate = UserProfileChangeRequest.Builder()
-                    .setDisplayName(name)
-                    .build()
+                val profileUpdate = UserProfileChangeRequest.Builder().setDisplayName(name).build()
                 user.updateProfile(profileUpdate).await()
 
                 usersRef.child(user.uid)
@@ -204,12 +267,13 @@ class FirebaseDataSource @Inject constructor(
 
     suspend fun deletePost(post: Post) {
         try {
-            val storagePath = extractStoragePath(post.url) ?: return
+            val storagePath = ImageUtils.extractStoragePath(post.url) ?: return
             val photoRef = storageReference.child(storagePath)
 
             photoRef.delete().await()
 
-            postsRef.child(firebaseAuth.currentUser?.uid ?: return).child(post.id).removeValue().await()
+            postsRef.child(firebaseAuth.currentUser?.uid ?: return).child(post.id).removeValue()
+                .await()
 
             Log.d("FirebaseDataSource", "Post and file deleted successfully")
         } catch (e: Exception) {
@@ -221,25 +285,12 @@ class FirebaseDataSource @Inject constructor(
                         Log.e("FirebaseDataSource", "Storage error: ${e.localizedMessage}")
                     }
                 }
+
                 else -> Log.e("FirebaseDataSource", "Error deleting post: ${e.localizedMessage}")
             }
         }
     }
 
-    /**
-     * Helper function to extract the storage path from the download URL.
-     */
-    private fun extractStoragePath(downloadUrl: String): String? {
-        return try {
-
-            val urlParts = downloadUrl.split("?")[0]
-            val encodedPath = urlParts.substringAfter("/o/")
-            Uri.decode(encodedPath)
-        } catch (e: Exception) {
-            Log.e("FirebaseDataSource", "Error extracting storage path: ${e.localizedMessage}")
-            null
-        }
-    }
 
     suspend fun getFriends(): List<UserDto> {
         val userId = firebaseAuth.currentUser?.uid ?: return emptyList()
@@ -371,11 +422,7 @@ class FirebaseDataSource @Inject constructor(
                                     commentSnapshot.child("profilePictureUrl").value.toString()
                                 val ownerId = commentSnapshot.child("ownerId").value.toString()
                                 CommentDto(
-                                    text,
-                                    commentUserName,
-                                    ownerId,
-                                    timestamp,
-                                    profilePictureUrl
+                                    text, commentUserName, ownerId, timestamp, profilePictureUrl
                                 )
                             }
 

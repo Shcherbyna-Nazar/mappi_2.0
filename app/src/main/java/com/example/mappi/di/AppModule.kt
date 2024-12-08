@@ -50,7 +50,13 @@ class AppModule {
         storageReference: StorageReference,
         firebaseAuth: FirebaseAuth,
         firebaseDatabase: FirebaseDatabase,
-    ): FirebaseDataSource = FirebaseDataSource(storageReference, firebaseAuth, firebaseDatabase)
+        @ApplicationContext context: Context
+    ): FirebaseDataSource = FirebaseDataSource(
+        storageReference,
+        firebaseAuth,
+        firebaseDatabase,
+        context
+    )
 
     @Provides
     fun provideAuthRepository(dataSource: FirebaseDataSource): AuthRepository =
