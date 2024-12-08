@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -116,7 +116,7 @@ fun MapScreen(
     LaunchedEffect(profileState.isLoading, friendPostsLoading) {
         if (!profileState.isLoading && !friendPostsLoading) {
             (myPosts + friendPosts).forEach { post ->
-                val postId = post.id.toString()
+                val postId = post.id
                 loadingMarkers[postId] = true
                 loadMarkerBitmap(context, post.url) { bitmap ->
                     markerBitmaps[postId] = bitmap
@@ -129,7 +129,7 @@ fun MapScreen(
     val allMarkersLoaded by remember {
         derivedStateOf {
             (myPosts + friendPosts).all { post ->
-                loadingMarkers[post.id.toString()] == false
+                loadingMarkers[post.id] == false
             }
         }
     }
@@ -160,7 +160,7 @@ fun MapScreen(
 
                 (myPosts + friendPosts).forEach { post ->
                     val markerPosition = LatLng(post.latitude, post.longitude)
-                    val postId = post.id.toString()
+                    val postId = post.id
                     val isSelected = clickedMarker.value == postId
                     val bitmap = markerBitmaps[postId]
 
@@ -178,15 +178,26 @@ fun MapScreen(
                                 )
                             }
                         )
+                        val title: String = if (myPosts.contains(post)) {
+                            "My Post"
+                        } else {
+                            "${post.userName}'s Post"
+                        }
                         Marker(
                             state = rememberMarkerState(position = markerPosition),
-                            title = if (myPosts.contains(post)) "My Post" else "Friend's Post",
+                            title = title,
                             snippet = if (isSelected) "(${post.latitude}, ${post.longitude})" else null,
                             icon = bitmapDescriptor,
                             zIndex = if (isSelected) 1f else 0f,
                             onClick = {
-                                clickedMarker.value = if (isSelected) null else postId
-                                true
+                                routePolyline = null
+                                isRouteVisible = false
+                                clickedMarker.value = if (isSelected) {
+                                    null
+                                } else {
+                                    postId
+                                }
+                                false
                             }
                         )
                     }
@@ -202,14 +213,14 @@ fun MapScreen(
         IconButton(
             onClick = {
                 selectedPost =
-                    (myPosts + friendPosts).find { it.id.toString() == clickedMarker.value }
+                    (myPosts + friendPosts).find { it.id == clickedMarker.value }
             },
             modifier = Modifier
-                .size(48.dp)
+                .size(56.dp)
                 .background(Color.Transparent, CircleShape)
                 .align(Alignment.BottomStart)
                 .offset(y = (-25).dp, x = 16.dp)
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             val painter = rememberAsyncImagePainter(model = R.drawable.baseline_zoom_out_map_24)
             Image(
@@ -222,13 +233,24 @@ fun MapScreen(
         }
 
         selectedPost?.let { post ->
-            FullScreenImageDialog(
-                imageUrl = post.url,
-                onDismissRequest = { selectedPost = null }
+            FullScreenImageWithComments(
+                myPosts,
+                friendPosts,
+                postId = post.id,
+                onDismissRequest = { selectedPost = null },
+                onAddComment = { comment ->
+                    if (myPosts.find { it.id == post.id } != null) {
+                        Log.e("nazar", "my post add comment")
+                        profileViewModel.addComment(post.id, comment)
+                    } else {
+                        Log.e("nazar", "friend post add comment")
+                        mapViewModel.addComment(post, comment)
+                    }
+                }
             )
         }
 
-        // Airplane button in the top-left corner
+        // Walking person button in the top-left corner
         if (clickedMarker.value != null) {
             IconButton(
                 onClick = {
@@ -236,12 +258,17 @@ fun MapScreen(
                         routePolyline = null
                         isRouteVisible = false
                     } else {
-                        val selectedPost = (myPosts + friendPosts).find { it.id.toString() == clickedMarker.value }
+                        val selectedPost =
+                            (myPosts + friendPosts).find { it.id == clickedMarker.value }
                         userLocation?.let { origin ->
                             selectedPost?.let { post ->
                                 val destination = LatLng(post.latitude, post.longitude)
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    val route = RouteUtils.fetchRoute(origin, destination, TravelMode.WALKING)
+                                    val route = RouteUtils.fetchRoute(
+                                        origin,
+                                        destination,
+                                        TravelMode.WALKING
+                                    )
                                     withContext(Dispatchers.Main) {
                                         routePolyline = route
                                         isRouteVisible = true
@@ -252,14 +279,15 @@ fun MapScreen(
                     }
                 },
                 modifier = Modifier
-                    .size(48.dp)
-                    .background(Color(0xFF0F3C3B), CircleShape)
+                    .size(56.dp) // Adjusted for better usability
+                    .background(Color.Transparent, CircleShape)
                     .align(Alignment.TopStart)
+                    .padding(12.dp) // Improved spacing
             ) {
-                Icon(
-                    painter = rememberAsyncImagePainter(model = R.drawable.ic_airplane),
-                    contentDescription = "Generate Route",
-                    tint = Color.White,
+                Image(
+                    painter = rememberAsyncImagePainter(model = R.drawable.ic_walking), // Walking icon
+                    contentDescription = "Generate Walking Route",
+                    colorFilter = ColorFilter.tint(if (clickedMarker.value != null) Color(0xFF0F3C3B) else Color.White),
                     modifier = Modifier.size(42.dp)
                 )
             }

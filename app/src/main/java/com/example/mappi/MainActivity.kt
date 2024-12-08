@@ -14,32 +14,38 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
-import androidx.compose.material.Tab
-import androidx.compose.material.TabRow
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
+import androidx.compose.material.TextField
+import androidx.compose.material.TextFieldDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -53,9 +59,8 @@ import com.example.mappi.presentation.ui.NavHostSetup
 import com.example.mappi.presentation.ui.decisions.compose.AnimationScreen
 import com.example.mappi.presentation.ui.decisions.compose.DecisionsScreen
 import com.example.mappi.presentation.ui.decisions.viewmodel.DecisionsViewModel
-import com.example.mappi.presentation.ui.friends.composable.FriendRequestsScreen
 import com.example.mappi.presentation.ui.friends.composable.FriendsListScreen
-import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreen
+import com.example.mappi.presentation.ui.friends.composable.SearchFriendsScreenContent
 import com.example.mappi.presentation.ui.main.composables.MainScreen
 import com.example.mappi.presentation.ui.main.composables.map.MapScreen
 import com.example.mappi.presentation.ui.main.composables.profile.ProfileScreen
@@ -121,15 +126,23 @@ class MainActivity : ComponentActivity() {
                         mainScreen = {
                             MainScreen(
                                 navController,
-                                mapScreen = { MapScreenContent() },
+                                mapScreen = {
+                                    MapScreen(applicationContext, mapViewModel, profileViewModel)
+                                },
                                 decisionScreen = { DecisionsScreenContent(navController) },
                                 profileScreen = { ProfileScreenContent(navController) },
                             )
                         },
-                        mapScreen = { MapScreenContent() },
+                        mapScreen = {
+                            MapScreen(applicationContext, mapViewModel, profileViewModel)
+                        },
                         recommendationScreen = { DecisionsScreenContent(navController) },
                         searchFriendsScreen = { SearchFriendsScreenContent() },
-                        friendsListScreen = { FriendsListScreenContent(navController) },
+                        friendsListScreen = {
+                            FriendsListScreen(
+                                onBackClick = { navController.popBackStack() }
+                            )
+                        },
                         profileScreen = { ProfileScreenContent(navController) },
                         animationScreen = { userLocation, restaurantLocation ->
                             AnimationScreen(
@@ -155,13 +168,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    @Composable
-    private fun FriendsListScreenContent(navController: NavController) {
-        FriendsListScreen(
-            onBackClick = { navController.popBackStack() }
-        )
     }
 
     @OptIn(ExperimentalAnimationApi::class)
@@ -280,11 +286,6 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun MapScreenContent() {
-        MapScreen(applicationContext, mapViewModel, profileViewModel)
-    }
-
-    @Composable
     fun DecisionsScreenContent(navController: NavController) {
         val userLocation = remember { mutableStateOf<Location?>(null) }
 
@@ -315,6 +316,9 @@ class MainActivity : ComponentActivity() {
     private fun ProfileScreenContent(navController: NavController) {
         var imageUri by remember { mutableStateOf<Uri?>(null) }
         var isProfileImage by remember { mutableStateOf(false) }
+        var showRatingDialog by remember { mutableStateOf(false) }
+        var selectedRating by remember { mutableStateOf(0) }
+        var commentText by remember { mutableStateOf("") }
 
         val takePicture =
             rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { isSuccess ->
@@ -326,21 +330,14 @@ class MainActivity : ComponentActivity() {
                                     it,
                                     0.0,
                                     0.0,
+                                    0,
+                                    "",
                                     isProfilePicture = true
                                 )
                                 showToast("Profile picture uploaded: $imageUrl")
                             }
                         } else {
-                            locationUtils.getCurrentLocation { location ->
-                                lifecycleScope.launch {
-                                    profileViewModel.uploadPhoto(
-                                        it,
-                                        location.latitude,
-                                        location.longitude
-                                    )
-                                    showToast("Image uploaded with location")
-                                }
-                            }
+                            showRatingDialog = true // Open the rating dialog after taking a photo
                         }
                     }
                 }
@@ -354,6 +351,8 @@ class MainActivity : ComponentActivity() {
                             it,
                             0.0,
                             0.0,
+                            0,
+                            "",
                             isProfilePicture = true
                         )
                         showToast("Profile picture uploaded: $imageUrl")
@@ -404,6 +403,115 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        if (showRatingDialog) {
+            AlertDialog(
+                onDismissRequest = { showRatingDialog = false },
+                title = {
+                    Text(
+                        text = "Rate and Comment",
+                        style = MaterialTheme.typography.h6,
+                        color = Color(0xFF408C68) // Using the custom color for title
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Please rate your post:",
+                            style = MaterialTheme.typography.body1,
+                            color = MaterialTheme.colors.onSurface
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            (1..5).forEach { star ->
+                                IconButton(onClick = { selectedRating = star }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "Star Rating",
+                                        tint = if (star <= selectedRating) Color(0xFFFFD700) else Color(0xFFCCCCCC), // Yellow for selected, light gray for unselected
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                        }
+                        TextField(
+                            value = commentText,
+                            onValueChange = { commentText = it },
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent, // Remove the default underline
+                                unfocusedIndicatorColor = Color.Transparent, // Remove the default underline
+                                cursorColor = Color(0xFF408C68),
+                                textColor = MaterialTheme.colors.onSurface
+                            ),
+                            textStyle = MaterialTheme.typography.body1,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    color = Color(0xFFF0F0F0), // Light background
+                                    shape = RoundedCornerShape(12.dp) // Rounded corners
+                                )
+                                .border(
+                                    width = 2.dp,
+                                    color = Color(0xFF408C68), // Green border
+                                    shape = RoundedCornerShape(12.dp) // Match the background's shape
+                                )
+                                .padding(horizontal = 16.dp, vertical = 12.dp) // Add padding inside the frame
+                        )
+
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRatingDialog = false
+                        locationUtils.getCurrentLocation { location ->
+                            lifecycleScope.launch {
+                                imageUri?.let { uri ->
+                                    profileViewModel.uploadPhoto(
+                                        uri,
+                                        location.latitude,
+                                        location.longitude,
+                                        rating = selectedRating,
+                                        comment = commentText
+                                    )
+                                    showToast("Post uploaded with rating and comment!")
+                                }
+                            }
+                        }
+                    }) {
+                        Text(
+                            text = "Submit",
+                            style = MaterialTheme.typography.button,
+                            color = Color.White,
+                            modifier = Modifier
+                                .background(Color(0xFF408C68))
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRatingDialog = false }) {
+                        Text(
+                            text = "Cancel",
+                            style = MaterialTheme.typography.button,
+                            color = MaterialTheme.colors.onSurface
+                        )
+                    }
+                },
+                backgroundColor = Color(0xFFE8F5E9), // Light green background for dialog
+                shape = RoundedCornerShape(12.dp) // Rounded corners for modern feel
+            )
+        }
+
+
         ProfileScreen(
             profileViewModel = profileViewModel,
             onAddPostClick = {
@@ -449,47 +557,6 @@ class MainActivity : ComponentActivity() {
             }
         )
     }
-
-    @OptIn(ExperimentalFoundationApi::class)
-    @Composable
-    fun SearchFriendsScreenContent() {
-        val pagerState = rememberPagerState(initialPage = 0)
-        val coroutineScope = rememberCoroutineScope()
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            TabRow(
-                backgroundColor = Color(0xFF0F3C3B),
-                contentColor = Color.White,
-                selectedTabIndex = pagerState.currentPage
-            ) {
-                Tab(
-                    text = { Text("Search Friends") },
-                    selected = pagerState.currentPage == 0,
-                    onClick = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(0)
-                        }
-                    }
-                )
-                Tab(
-                    text = { Text("Friend Requests") },
-                    selected = pagerState.currentPage == 1,
-                    onClick = {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(1)
-                        }
-                    }
-                )
-            }
-            HorizontalPager(pageCount = 2, state = pagerState) { page ->
-                when (page) {
-                    0 -> SearchFriendsScreen()
-                    1 -> FriendRequestsScreen()
-                }
-            }
-        }
-    }
-
 
     private fun createImageFile(): File {
         val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
