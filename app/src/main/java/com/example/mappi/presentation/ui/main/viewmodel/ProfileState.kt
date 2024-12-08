@@ -1,4 +1,4 @@
-package com.example.mappi.presentation.ui.main.composables.profile
+package com.example.mappi.presentation.ui.main.viewmodel
 
 import com.example.mappi.domain.model.Post
 import com.example.mappi.domain.model.UserData
