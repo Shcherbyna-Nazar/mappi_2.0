@@ -12,6 +12,7 @@ import com.example.mappi.domain.use_case.auth.SignOutUseCase
 import com.example.mappi.domain.use_case.profile.AddCommentUseCase
 import com.example.mappi.domain.use_case.profile.DeletePostUseCase
 import com.example.mappi.domain.use_case.profile.GetPostsUseCase
+import com.example.mappi.domain.use_case.profile.UpdateUserProfileUseCase
 import com.example.mappi.domain.use_case.profile.UploadPhotoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -27,7 +28,8 @@ class ProfileViewModel @Inject constructor(
     private val getPostsUseCase: GetPostsUseCase,
     private val getSignedInUser: GetSignedInUserUseCase,
     private val deletePostUseCase: DeletePostUseCase,
-    private val addCommentUseCase: AddCommentUseCase
+    private val addCommentUseCase: AddCommentUseCase,
+    private val updateUserProfileUseCase: UpdateUserProfileUseCase
 ) : ViewModel() {
 
     private val _profileState =
@@ -216,6 +218,26 @@ class ProfileViewModel @Inject constructor(
             signOutUseCase()
             _profileState.value = ProfileState(null, emptyList(), null, isLoading = false)
             Log.d("ProfileViewModel", "User signed out")
+        }
+    }
+
+    fun updateUserProfile(
+        userName: String,
+        email: String
+    ) {
+        updateLoadingState(true)
+        viewModelScope.launch {
+            try {
+                updateUserProfileUseCase(userName, email)
+                val userData = getSignedInUser() ?: throw Exception("User not signed in")
+                _profileState.value = _profileState.value.copy(userData = userData)
+                Log.d("ProfileViewModel", "User profile updated successfully")
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Error updating user profile", e)
+                updateErrorState(e.message)
+            } finally {
+                updateLoadingState(false)
+            }
         }
     }
 

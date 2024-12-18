@@ -12,6 +12,7 @@ import com.example.mappi.domain.model.Post
 import com.example.mappi.domain.model.RequestStatus
 import com.example.mappi.util.ImageUtils
 import com.example.mappi.util.Resource
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
@@ -489,5 +490,46 @@ class FirebaseDataSource @Inject constructor(
             "profilePictureUrl" to mapToDto.profilePictureUrl
         )
         postsRef.child(mapToDto.ownerId).child(postId).child("comments").push().setValue(comment)
+    }
+
+    suspend fun resetPassword(email: String) {
+        try {
+            firebaseAuth.sendPasswordResetEmail(email).await()
+        } catch (e: Exception) {
+            Log.e("ResetPassword", "Error resetting password", e)
+        }
+    }
+
+    suspend fun updateUserProfile(userName: String, email: String) {
+        val currentUser = firebaseAuth.currentUser ?: return
+        try {
+            val isEmailProviderLinked =
+                currentUser.providerData.any { it.providerId == EmailAuthProvider.PROVIDER_ID }
+
+
+            if (isEmailProviderLinked) {
+                currentUser.updateEmail(email).await()
+            } else {
+                Log.e("UpdateProfile", "Email provider not linked")
+            }
+
+            val profileUpdate = UserProfileChangeRequest.Builder().setDisplayName(userName).build()
+            currentUser.updateProfile(profileUpdate).await()
+
+            val updates = mutableMapOf<String, Any>()
+
+            updates["userName"] = userName
+
+            if (isEmailProviderLinked) {
+                updates["email"] = email
+            } else {
+                updates["email"] = email
+            }
+
+            usersRef.child(currentUser.uid).updateChildren(updates).await()
+        } catch (e: Exception) {
+            Log.e("UpdateProfile", "Error updating profile", e)
+            throw e
+        }
     }
 }

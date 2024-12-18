@@ -46,4 +46,8 @@ class FirebaseAuthRepository @Inject constructor(
     override fun getSignedInUser(): UserData? {
         return firebaseDataSource.getSignedInUser()?.let { UserDataMapper.mapToDomain(it) }
     }
+
+    override suspend fun resetPassword(email: String) {
+        firebaseDataSource.resetPassword(email)
+    }
 }

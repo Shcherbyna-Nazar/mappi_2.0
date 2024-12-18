@@ -1,5 +1,6 @@
 package com.example.mappi.presentation.ui.sign_in.composables
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +40,8 @@ import androidx.compose.ui.unit.dp
 fun SignInContent(
     email: String,
     password: String,
-    onEmailSignInClick: (String, String) -> Unit
+    onEmailSignInClick: (String, String) -> Unit,
+    onResetPasswordClick: (String) -> Unit
 ) {
     var localEmail by remember { mutableStateOf(email) }
     var localPassword by remember { mutableStateOf(password) }
@@ -103,6 +105,21 @@ fun SignInContent(
                     }
                 }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Forgot Password?
+            Text(
+                text = "Forgot Password?",
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable {
+                        // Trigger password reset
+                        onResetPasswordClick(localEmail)
+                    }
+                    .padding(4.dp)
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(

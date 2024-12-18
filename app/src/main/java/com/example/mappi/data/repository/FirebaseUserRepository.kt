@@ -58,5 +58,9 @@ class FirebaseUserRepository(
     override suspend fun deleteFriend(friendId: String) {
         dataSource.deleteFriend(friendId)
     }
+
+    override suspend fun updateUserProfile(userName: String, email: String) {
+        dataSource.updateUserProfile(userName, email)
+    }
 }
 
