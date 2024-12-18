@@ -127,14 +127,24 @@ class MainActivity : ComponentActivity() {
                             MainScreen(
                                 navController,
                                 mapScreen = {
-                                    MapScreen(applicationContext, mapViewModel, profileViewModel)
+                                    MapScreen(
+                                        applicationContext,
+                                        mapViewModel,
+                                        profileViewModel,
+                                        decisionViewModel,
+                                    )
                                 },
                                 decisionScreen = { DecisionsScreenContent(navController) },
                                 profileScreen = { ProfileScreenContent(navController) },
                             )
                         },
                         mapScreen = {
-                            MapScreen(applicationContext, mapViewModel, profileViewModel)
+                            MapScreen(
+                                applicationContext,
+                                mapViewModel,
+                                profileViewModel,
+                                decisionViewModel,
+                            )
                         },
                         recommendationScreen = { DecisionsScreenContent(navController) },
                         searchFriendsScreen = { SearchFriendsScreenContent() },
