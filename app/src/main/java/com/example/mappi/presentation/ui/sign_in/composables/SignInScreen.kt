@@ -54,12 +54,14 @@ fun SignInScreen(
     state: SignInState,
     onSignInWithGoogleClick: () -> Unit,
     onEmailSignInClick: (email: String, password: String) -> Unit,
+    onResetPasswordClick: (email: String) -> Unit,
     navController: NavController
 ) {
     val context = LocalContext.current
-    val email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     val password by remember { mutableStateOf("") }
     var showAuth by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(key1 = state.signInError) {
         state.signInError?.let { error ->
@@ -98,9 +100,17 @@ fun SignInScreen(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                SignInContent(email, password, onEmailSignInClick)
+                SignInContent(
+                    email,
+                    password,
+                    onEmailSignInClick,
+                    onResetPasswordClick = {
+                        showResetDialog = true
+                    },
+                )
             }
         }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Bottom,
@@ -114,8 +124,7 @@ fun SignInScreen(
                 modifier = Modifier
                     .height(60.dp)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(45)),
-                border = null // Убираем рамку
+                    .clip(RoundedCornerShape(45))
             ) {
                 Text("Sign In", color = Color.White, fontSize = 18.sp)
             }
@@ -127,14 +136,14 @@ fun SignInScreen(
                 modifier = Modifier
                     .height(60.dp)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(45)) // Adjusted for proper clipping
+                    .clip(RoundedCornerShape(45))
                     .then(
                         Modifier.border(
                             BorderStroke(
                                 1.dp,
                                 Brush.linearGradient(listOf(Color(0xFFF5C398), Color(0xFF03DAC5)))
                             ),
-                            shape = RoundedCornerShape(45) // Ensure this matches the clip shape
+                            shape = RoundedCornerShape(45)
                         )
                     ),
                 colors = ButtonDefaults.buttonColors(backgroundColor = Color.Transparent),
@@ -144,11 +153,11 @@ fun SignInScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.google), // Ensure you have a drawable resource named `ic_google_logo`
+                        painter = painterResource(id = R.drawable.google),
                         contentDescription = "Google Sign In",
-                        modifier = Modifier.size(24.dp) // Adjust the size as needed
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(Modifier.width(8.dp)) // Adjust spacing between image and text as needed
+                    Spacer(Modifier.width(8.dp))
                     Text("Sign In With Google", color = Color.White, fontSize = 18.sp)
                 }
             }
@@ -161,12 +170,32 @@ fun SignInScreen(
                     .height(40.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(50)),
-                // Also removing the border by not specifying it and setting background to transparent
                 colors = ButtonDefaults.textButtonColors(backgroundColor = Color.Transparent)
             ) {
                 Text("Create an Account", color = Color.White, fontSize = 18.sp)
             }
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+
+    // Reset Password Dialog
+    if (showResetDialog) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ResetPasswordDialog(
+                email = email,
+                onEmailChange = { newEmail -> email = newEmail },
+                onResetClick = {
+                    onResetPasswordClick(it)
+                    showResetDialog = false
+                    Toast.makeText(context, "Password reset email sent", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { showResetDialog = false }
+            )
         }
     }
 }

@@ -12,4 +12,5 @@ interface UserRepository {
     suspend fun getFriendRequests(): List<FriendRequest>
     suspend fun getUserById(userId: String): UserData
     suspend fun deleteFriend(friendId: String)
+    suspend fun updateUserProfile(userName: String, email: String): Any
 }

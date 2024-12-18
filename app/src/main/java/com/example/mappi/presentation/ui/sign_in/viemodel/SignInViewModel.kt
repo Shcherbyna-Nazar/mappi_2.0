@@ -3,6 +3,7 @@ package com.example.mappi.presentation.ui.sign_in.viemodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mappi.domain.model.UserData
+import com.example.mappi.domain.use_case.auth.ResetPasswordUseCase
 import com.example.mappi.domain.use_case.auth.SignInWithEmailUseCase
 import com.example.mappi.presentation.ui.sign_in.SignInState
 import com.example.mappi.util.Resource
@@ -15,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SignInViewModel @Inject constructor(
-    private val SignInWithEmailUseCase: SignInWithEmailUseCase
+    private val SignInWithEmailUseCase: SignInWithEmailUseCase,
+    private val resetPasswordUseCase: ResetPasswordUseCase
 ) : ViewModel() {
     private val _state = MutableStateFlow(SignInState())
     val state = _state.asStateFlow()
@@ -38,5 +40,11 @@ class SignInViewModel @Inject constructor(
 
     fun resetState() {
         _state.update { SignInState() }
+    }
+
+    fun resetPassword(email: String) {
+        viewModelScope.launch {
+            resetPasswordUseCase(email)
+        }
     }
 }

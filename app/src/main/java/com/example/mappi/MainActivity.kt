@@ -212,6 +212,9 @@ class MainActivity : ComponentActivity() {
             onEmailSignInClick = { email, password ->
                 lifecycleScope.launch { signInViewModel.signInWithEmail(email, password) }
             },
+            onResetPasswordClick = { email ->
+                lifecycleScope.launch { signInViewModel.resetPassword(email) }
+            },
             navController = navController
         )
     }
@@ -275,6 +278,8 @@ class MainActivity : ComponentActivity() {
                 navController.navigate("main") {
                     popUpTo("register") { inclusive = true }
                 }
+                profileViewModel.loadProfile()
+                mapViewModel.loadFriendPosts()
                 signUpViewModel.resetState()
             }
 

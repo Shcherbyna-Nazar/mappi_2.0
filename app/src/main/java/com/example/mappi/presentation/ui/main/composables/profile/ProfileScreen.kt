@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -65,12 +66,12 @@ fun ProfileScreen(
     onDeletePostClick: (Post) -> Unit,
     onFriendsClick: () -> Unit
 ) {
-
     val friendsViewModel: FriendsViewModel = hiltViewModel()
     val friends = friendsViewModel.friends.collectAsState()
     val profileState by profileViewModel.profileState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var selectedPost by remember { mutableStateOf<Post?>(null) }
+    var showEditDialog by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -174,13 +175,29 @@ fun ProfileScreen(
                         .offset(y = (-60).dp)
                 ) {
                     profileState.userData?.userName?.let { userName ->
-                        Text(
-                            text = userName,
-                            textAlign = TextAlign.Center,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF113030)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = userName,
+                                textAlign = TextAlign.Center,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF113030)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Edit icon placed right next to the username
+                            IconButton(onClick = { showEditDialog = true }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.baseline_edit_24), // Make sure you have an edit icon drawable
+                                    contentDescription = "Edit Profile",
+                                    tint = Color(0xFF3E8B67) // Matches theme color
+                                )
+                            }
+                        }
                     }
 
                     profileState.userData?.email?.let { email ->
@@ -258,9 +275,20 @@ fun ProfileScreen(
                 )
             }
         }
+
+        if (showEditDialog) {
+            EditProfileBottomSheet(
+                currentUserName = profileState.userData?.userName.orEmpty(),
+                currentEmail = profileState.userData?.email.orEmpty(),
+                onDismiss = { showEditDialog = false },
+                onSave = { updatedUserName, updatedEmail ->
+                    profileViewModel.updateUserProfile(updatedUserName, updatedEmail)
+                    showEditDialog = false
+                }
+            )
+        }
     }
 }
-
 
 @Composable
 fun ZoomableImage(
@@ -331,7 +359,6 @@ fun ZoomableImage(
         )
     }
 }
-
 
 @Composable
 fun FullScreenDialog(
