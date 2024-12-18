@@ -3,31 +3,16 @@ package com.example.mappi.presentation.ui.main.composables.map
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.util.Log
+import android.graphics.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.IconButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +30,7 @@ import coil.transform.CircleCropTransformation
 import com.example.mappi.R
 import com.example.mappi.domain.model.Post
 import com.example.mappi.presentation.ui.decisions.compose.TravelMode
+import com.example.mappi.presentation.ui.decisions.viewmodel.DecisionsViewModel
 import com.example.mappi.presentation.ui.main.viewmodel.MapViewModel
 import com.example.mappi.presentation.ui.main.viewmodel.ProfileViewModel
 import com.example.mappi.util.RouteUtils
@@ -53,22 +39,22 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.PolylineOptions
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.Polyline
-import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.compose.rememberMarkerState
+import com.google.maps.android.compose.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.cos
+import kotlin.math.sin
+
+private const val RECOMMENDATION_MARKER_ID = "recommendation_place"
 
 @Composable
 fun MapScreen(
     context: Context,
     mapViewModel: MapViewModel,
-    profileViewModel: ProfileViewModel
+    profileViewModel: ProfileViewModel,
+    decisionsViewModel: DecisionsViewModel,
 ) {
     var hasLocationPermission by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -77,10 +63,8 @@ fun MapScreen(
     )
 
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED
         ) {
             hasLocationPermission = true
         } else {
@@ -90,6 +74,8 @@ fun MapScreen(
 
     val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
     val myPosts = profileState.posts
+
+    val recommendationPlace by decisionsViewModel.placeRecommendation.collectAsState()
 
     val friendPosts by mapViewModel.friendPosts.collectAsState()
     val friendPostsLoading by mapViewModel.isLoading.collectAsState()
@@ -113,6 +99,7 @@ fun MapScreen(
     val markerBitmaps = remember { mutableStateMapOf<String, Bitmap?>() }
     val loadingMarkers = remember { mutableStateMapOf<String, Boolean>() }
 
+    // Load post markers
     LaunchedEffect(profileState.isLoading, friendPostsLoading) {
         if (!profileState.isLoading && !friendPostsLoading) {
             (myPosts + friendPosts).forEach { post ->
@@ -134,12 +121,26 @@ fun MapScreen(
         }
     }
 
+    // Load recommendation place bitmap
+    val (recommendedBitmap, setRecommendedBitmap) = remember { mutableStateOf<Bitmap?>(null) }
+    var recommendationLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(recommendationPlace) {
+        recommendationPlace?.let { place ->
+            recommendationLoading = true
+            loadMarkerBitmap(context, place.photoUrl) { bitmap ->
+                setRecommendedBitmap(bitmap)
+                recommendationLoading = false
+            }
+        }
+    }
+
     var selectedPost by remember { mutableStateOf<Post?>(null) }
     var routePolyline by remember { mutableStateOf<PolylineOptions?>(null) }
     var isRouteVisible by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (!profileState.isLoading && allMarkersLoaded) {
+        if (!profileState.isLoading && allMarkersLoaded && !recommendationLoading) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
@@ -158,6 +159,7 @@ fun MapScreen(
                     )
                 }
 
+                // Draw user's and friends' posts
                 (myPosts + friendPosts).forEach { post ->
                     val markerPosition = LatLng(post.latitude, post.longitude)
                     val postId = post.id
@@ -169,12 +171,12 @@ fun MapScreen(
                             if (isSelected) {
                                 addCircularBorderToBitmap(
                                     scaleBitmap(it, 100, 100),
-                                    Color(0xFF0F3C3B)
+                                    Color(0xFF0F3C3B).toArgb()
                                 )
                             } else {
                                 addCircularBorderToBitmap(
                                     scaleBitmap(it, 75, 75),
-                                    Color(0xFF0F3C3B)
+                                    Color(0xFF0F3C3B).toArgb()
                                 )
                             }
                         )
@@ -192,11 +194,31 @@ fun MapScreen(
                             onClick = {
                                 routePolyline = null
                                 isRouteVisible = false
-                                clickedMarker.value = if (isSelected) {
-                                    null
-                                } else {
-                                    postId
-                                }
+                                clickedMarker.value = if (isSelected) null else postId
+                                false
+                            }
+                        )
+                    }
+                }
+
+                // Recommended place marker with a distinct star shape
+                recommendationPlace?.let { place ->
+                    recommendedBitmap?.let { bmp ->
+                        val isSelected = (clickedMarker.value == RECOMMENDATION_MARKER_ID)
+                        val markerBitmap = createStarShapedMarker(bmp, isSelected)
+                        val location = place.location
+                        val markerPosition = LatLng(location.latitude, location.longitude)
+                        Marker(
+                            state = rememberMarkerState(position = markerPosition),
+                            title = "Recommended: ${place.name}",
+                            snippet = if (isSelected) "(${location.latitude}, ${location.longitude})" else "Expert Recommendation",
+                            icon = BitmapDescriptorFactory.fromBitmap(markerBitmap),
+                            zIndex = if (isSelected) 2f else 0f,
+                            onClick = {
+                                routePolyline = null
+                                isRouteVisible = false
+                                clickedMarker.value =
+                                    if (isSelected) null else RECOMMENDATION_MARKER_ID
                                 false
                             }
                         )
@@ -210,10 +232,10 @@ fun MapScreen(
             )
         }
 
+        // Button to open post details
         IconButton(
             onClick = {
-                selectedPost =
-                    (myPosts + friendPosts).find { it.id == clickedMarker.value }
+                selectedPost = (myPosts + friendPosts).find { it.id == clickedMarker.value }
             },
             modifier = Modifier
                 .size(56.dp)
@@ -226,12 +248,15 @@ fun MapScreen(
             Image(
                 painter = painter,
                 contentDescription = "View Post Image",
-                colorFilter = ColorFilter.tint(if (clickedMarker.value != null) Color(0xFF0F3C3B) else Color.White),
+                colorFilter = ColorFilter.tint(
+                    if (clickedMarker.value != null) Color(0xFF0F3C3B) else Color.White
+                ),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(42.dp)
             )
         }
 
+        // Full screen image with comments only applies to posts
         selectedPost?.let { post ->
             FullScreenImageWithComments(
                 myPosts,
@@ -240,38 +265,48 @@ fun MapScreen(
                 onDismissRequest = { selectedPost = null },
                 onAddComment = { comment ->
                     if (myPosts.find { it.id == post.id } != null) {
-                        Log.e("nazar", "my post add comment")
                         profileViewModel.addComment(post.id, comment)
                     } else {
-                        Log.e("nazar", "friend post add comment")
                         mapViewModel.addComment(post, comment)
                     }
                 }
             )
         }
 
-        // Walking person button in the top-left corner
+        // Route button: works for both posts and recommended place
         if (clickedMarker.value != null) {
             IconButton(
                 onClick = {
                     if (isRouteVisible) {
+                        // Hide route
                         routePolyline = null
                         isRouteVisible = false
                     } else {
-                        val selectedPost =
-                            (myPosts + friendPosts).find { it.id == clickedMarker.value }
+                        // Show route
                         userLocation?.let { origin ->
-                            selectedPost?.let { post ->
-                                val destination = LatLng(post.latitude, post.longitude)
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    val route = RouteUtils.fetchRoute(
-                                        origin,
-                                        destination,
-                                        TravelMode.WALKING
-                                    )
-                                    withContext(Dispatchers.Main) {
-                                        routePolyline = route
-                                        isRouteVisible = true
+                            if (clickedMarker.value == RECOMMENDATION_MARKER_ID) {
+                                // Route to recommended place
+                                recommendationPlace?.let { place ->
+                                    val destination = LatLng(place.location.latitude, place.location.longitude)
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        val route = RouteUtils.fetchRoute(origin, destination, TravelMode.WALKING)
+                                        withContext(Dispatchers.Main) {
+                                            routePolyline = route
+                                            isRouteVisible = true
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Route to selected post
+                                val selectedPost = (myPosts + friendPosts).find { it.id == clickedMarker.value }
+                                selectedPost?.let { post ->
+                                    val destination = LatLng(post.latitude, post.longitude)
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        val route = RouteUtils.fetchRoute(origin, destination, TravelMode.WALKING)
+                                        withContext(Dispatchers.Main) {
+                                            routePolyline = route
+                                            isRouteVisible = true
+                                        }
                                     }
                                 }
                             }
@@ -279,15 +314,17 @@ fun MapScreen(
                     }
                 },
                 modifier = Modifier
-                    .size(56.dp) // Adjusted for better usability
+                    .size(56.dp)
                     .background(Color.Transparent, CircleShape)
                     .align(Alignment.TopStart)
-                    .padding(12.dp) // Improved spacing
+                    .padding(12.dp)
             ) {
                 Image(
-                    painter = rememberAsyncImagePainter(model = R.drawable.ic_walking), // Walking icon
+                    painter = rememberAsyncImagePainter(model = R.drawable.ic_walking),
                     contentDescription = "Generate Walking Route",
-                    colorFilter = ColorFilter.tint(if (clickedMarker.value != null) Color(0xFF0F3C3B) else Color.White),
+                    colorFilter = ColorFilter.tint(
+                        if (clickedMarker.value != null) Color(0xFF0F3C3B) else Color.White
+                    ),
                     modifier = Modifier.size(42.dp)
                 )
             }
@@ -295,6 +332,29 @@ fun MapScreen(
     }
 }
 
+// Utility functions
+
+fun addCircularBorderToBitmap(bitmap: Bitmap, borderColor: Int, borderWidth: Float = 6f): Bitmap {
+    val size = maxOf(bitmap.width, bitmap.height)
+    val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+
+    val canvas = Canvas(output)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
+    val radius = size / 2f
+
+    val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+    paint.shader = shader
+    canvas.drawCircle(radius, radius, radius - borderWidth, paint)
+
+    // Border
+    paint.shader = null
+    paint.style = Paint.Style.STROKE
+    paint.color = borderColor
+    paint.strokeWidth = borderWidth
+    canvas.drawCircle(radius, radius, radius - borderWidth / 2, paint)
+
+    return output
+}
 
 suspend fun loadMarkerBitmap(
     context: Context,
@@ -318,19 +378,70 @@ fun scaleBitmap(bitmap: Bitmap, width: Int, height: Int): Bitmap {
     return Bitmap.createScaledBitmap(bitmap, width, height, false)
 }
 
-fun addCircularBorderToBitmap(bitmap: Bitmap, borderColor: Color): Bitmap {
-    val borderSize = 5
-    val diameter = bitmap.width + borderSize * 2
-    val newBitmap = Bitmap.createBitmap(diameter, diameter, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(newBitmap)
-    val paint = Paint().apply {
-        color = borderColor.toArgb()
-        style = Paint.Style.STROKE
-        strokeWidth = borderSize.toFloat()
-        isAntiAlias = true
+/**
+ * Creates a star-shaped marker for the recommended place.
+ * If `isSelected` is true, the star is larger and the border more pronounced.
+ * Otherwise, it is smaller.
+ */
+fun createStarShapedMarker(bitmap: Bitmap, isSelected: Boolean): Bitmap {
+    val size = if (isSelected) 175 else 125
+    val scaledBitmap = scaleBitmap(bitmap, size, size)
+
+    val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+
+    val path = createStarPath(cx = size / 2f, cy = size / 2f, radius = size / 2f - 10f, spikes = 5)
+
+    // Clip the canvas to the star shape
+    val saveCount = canvas.save()
+    canvas.clipPath(path)
+
+    // Draw the scaled image inside the star
+    val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
+    val shader = BitmapShader(scaledBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+    imagePaint.shader = shader
+    canvas.drawPath(path, imagePaint)
+
+    canvas.restoreToCount(saveCount)
+
+    // Draw a gradient border outside the star path
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    borderPaint.style = Paint.Style.STROKE
+    borderPaint.strokeWidth = if (isSelected) 10f else 6f
+
+    val startColor = Color(0xFF0F3C3B).toArgb()
+    val endColor = Color(0xFF33AACC).toArgb()
+    val gradientShader = SweepGradient(
+        size / 2f, size / 2f,
+        intArrayOf(startColor, endColor, startColor),
+        floatArrayOf(0f, 0.5f, 1f)
+    )
+    borderPaint.shader = gradientShader
+
+    canvas.drawPath(path, borderPaint)
+
+    return output
+}
+
+/**
+ * Creates a star-shaped Path.
+ * @param cx Center X
+ * @param cy Center Y
+ * @param radius Outer radius of the star
+ * @param spikes Number of spikes in the star
+ */
+fun createStarPath(cx: Float, cy: Float, radius: Float, spikes: Int): Path {
+    val path = Path()
+    val innerRadius = radius / 2.5
+    val angle = Math.PI / spikes
+
+    path.moveTo(cx, cy - radius)
+    for (i in 0 until spikes * 2) {
+        val r = if (i % 2 == 0) radius else innerRadius.toFloat()
+        val x = cx + (r * sin(i * angle)).toFloat()
+        val y = cy - (r * cos(i * angle)).toFloat()
+        path.lineTo(x, y)
     }
-    val radius = diameter / 2f
-    canvas.drawCircle(radius, radius, radius - borderSize / 2f, paint)
-    canvas.drawBitmap(bitmap, borderSize.toFloat(), borderSize.toFloat(), null)
-    return newBitmap
+    path.close()
+    return path
 }
